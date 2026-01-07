@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Message, DiscoveryResult, AppState, Language, DiscoveryMode, Dimension } from './types';
+import { Message, DiscoveryResult, AppState, Language, DiscoveryMode, DiscoveryIntensity, Dimension } from './types';
 import { getNextQuestion, generateFinalAnalysis } from './services/geminiService';
 import { ChatBubble } from './components/ChatBubble';
 import { ProgressBar } from './components/ProgressBar';
@@ -24,13 +24,17 @@ import {
   Dna,
   ShieldCheck,
   Target,
-  Trophy
+  Trophy,
+  Activity,
+  Infinity as InfinityIcon,
+  Timer,
+  AlertCircle
 } from 'lucide-react';
 
 declare const html2canvas: any;
 
-const TARGET_QUESTIONS = 7;
-const MAX_QUESTIONS = 12;
+const QUICK_TARGET = 7;
+const DEEP_TARGET = 15;
 
 const i18n = {
   zh: {
@@ -38,12 +42,18 @@ const i18n = {
     subtitle: "从心出发，发现方向",
     landingDesc: "这不是一次普通的测试，而是一场关于真实的对峙。请选择一个领域，我们将通过层层追问，剥离社会人格，寻找你的真实原点。",
     beginBtn: "开启旅程",
+    intensityTitle: "选择对话强度",
+    intensityDesc: "深度的旅程需要更多的时间与勇气，快速的相遇则直击本质。",
     modeLife: "人生意义",
     modeLifeDesc: "关于存在、痛苦与终极价值",
     modeCareer: "职业方向",
     modeCareerDesc: "关于权力、安全与自我异化",
     modeTalent: "天赋爱好",
     modeTalentDesc: "关于热忱、心流与感官本能",
+    intensityQuick: "快速相遇",
+    intensityQuickDesc: "直击要害，7-10轮对话快速生成图谱",
+    intensityDeep: "深度对话",
+    intensityDeepDesc: "不限次数，深入潜意识，15轮后可随时生成",
     analyzingTitle: "正在解析你的真我能量...",
     analyzingDesc: "AI 正在对比你的理想化陈述与本能反馈，编织属于你的灵魂图谱。",
     resultTitle: "探索终局报告",
@@ -51,22 +61,30 @@ const i18n = {
     inputPlaceholder: "请在深思后给出最本能的回答...",
     langToggle: "Switch to English",
     finishBtn: "生成真我图谱报告",
-    backBtn: "返回主页",
+    backBtn: "返回",
     exportChat: "导出对话记录",
     exportReport: "导出人生图谱",
     dimensionTitle: "真我能量矩阵",
+    errorQuota: "灵感已枯竭或服务器过载。请稍后再试或检查 API 配额。",
+    retryBtn: "重试最后一次对话",
   },
   en: {
     title: "Explorer's Compass",
     subtitle: "Navigate Your Soul",
     landingDesc: "This is not a regular test, but a confrontation with reality. Choose a path, and we'll peel away your social persona to find your true origin.",
     beginBtn: "Start Journey",
+    intensityTitle: "Choose Dialogue Intensity",
+    intensityDesc: "Deep journeys require more time and courage, while quick encounters hit the essence immediately.",
     modeLife: "Meaning of Life",
     modeLifeDesc: "Existence, Pain, & Ultimate Values",
     modeCareer: "Career Path",
     modeCareerDesc: "Power, Security, & Alienation",
     modeTalent: "Talent & Passion",
     modeTalentDesc: "Enthusiasm, Flow, & Instinct",
+    intensityQuick: "Quick Encounter",
+    intensityQuickDesc: "Direct hits, 7-10 rounds to quickly generate a map",
+    intensityDeep: "Deep Dialogue",
+    intensityDeepDesc: "Unlimited rounds, diving deep, available to finish after round 15",
     analyzingTitle: "Decoding Your Energy...",
     analyzingDesc: "AI is cross-referencing your statements with instinctive pulses to weave your map.",
     resultTitle: "Final Discovery Report",
@@ -74,20 +92,24 @@ const i18n = {
     inputPlaceholder: "Answer with your deepest instinct...",
     langToggle: "切换至中文",
     finishBtn: "Generate Truth Map Report",
-    backBtn: "Back to Home",
+    backBtn: "Back",
     exportChat: "Export History",
     exportReport: "Export Truth Map",
     dimensionTitle: "Authenticity Energy Matrix",
+    errorQuota: "Inspiration exhausted or server overloaded. Please wait a moment or check your API quota.",
+    retryBtn: "Retry last dialogue",
   }
 };
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>('landing');
   const [mode, setMode] = useState<DiscoveryMode | null>(null);
+  const [intensity, setIntensity] = useState<DiscoveryIntensity>('QUICK');
   const [lang, setLang] = useState<Language>('zh');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DiscoveryResult | null>(null);
   const [questionCount, setQuestionCount] = useState(0);
   const [canFinishEarly, setCanFinishEarly] = useState(false);
@@ -105,17 +127,28 @@ const App: React.FC = () => {
 
   const selectMode = (m: DiscoveryMode) => {
     setMode(m);
-    setState('chatting');
-    startJourney(m);
+    setState('intensity_select');
   };
 
-  const startJourney = async (m: DiscoveryMode) => {
+  const selectIntensity = (i: DiscoveryIntensity) => {
+    setIntensity(i);
+    setState('chatting');
+    if (mode) startJourney(mode, i);
+  };
+
+  const startJourney = async (m: DiscoveryMode, i: DiscoveryIntensity) => {
     setIsLoading(true);
-    const initialMessage: Message = { id: 'start', role: 'user', content: 'START', timestamp: Date.now() };
-    const firstQuestion = await getNextQuestion([initialMessage], m);
-    setMessages([{ id: Date.now().toString(), role: 'assistant', content: firstQuestion, timestamp: Date.now() }]);
-    setQuestionCount(1);
-    setIsLoading(false);
+    setError(null);
+    try {
+      const initialMessage: Message = { id: 'start', role: 'user', content: 'START', timestamp: Date.now() };
+      const firstQuestion = await getNextQuestion([initialMessage], m, i);
+      setMessages([{ id: Date.now().toString(), role: 'assistant', content: firstQuestion, timestamp: Date.now() }]);
+      setQuestionCount(1);
+    } catch (e: any) {
+      setError(e.message || t.errorQuota);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSend = async () => {
@@ -124,27 +157,64 @@ const App: React.FC = () => {
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+    setError(null);
     try {
-      const nextQRaw = await getNextQuestion([...messages, userMessage], mode);
-      if (nextQRaw.includes('[DONE]') || questionCount >= TARGET_QUESTIONS) setCanFinishEarly(true);
+      const nextQRaw = await getNextQuestion([...messages, userMessage], mode, intensity);
+      
+      const isQuickFinished = intensity === 'QUICK' && (nextQRaw.includes('[DONE]') || questionCount >= QUICK_TARGET);
+      const isDeepFinished = intensity === 'DEEP' && (questionCount >= DEEP_TARGET);
+      
+      if (isQuickFinished || isDeepFinished) setCanFinishEarly(true);
+      
       const nextQ = nextQRaw.replace('[DONE]', '').trim();
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: nextQ, timestamp: Date.now() }]);
       setQuestionCount(prev => prev + 1);
-    } catch (e) { console.error(e); } finally { setIsLoading(false); }
+    } catch (e: any) {
+      setError(e.message || t.errorQuota);
+    } finally { 
+      setIsLoading(false); 
+    }
+  };
+
+  const handleRetry = async () => {
+    if (isLoading || !mode) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      // Find the last user message to retry the prompt
+      const history = [...messages];
+      const nextQRaw = await getNextQuestion(history, mode, intensity);
+      
+      const isQuickFinished = intensity === 'QUICK' && (nextQRaw.includes('[DONE]') || questionCount >= QUICK_TARGET);
+      const isDeepFinished = intensity === 'DEEP' && (questionCount >= DEEP_TARGET);
+      
+      if (isQuickFinished || isDeepFinished) setCanFinishEarly(true);
+      
+      const nextQ = nextQRaw.replace('[DONE]', '').trim();
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: nextQ, timestamp: Date.now() }]);
+      setQuestionCount(prev => prev + 1);
+    } catch (e: any) {
+      setError(e.message || t.errorQuota);
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   const analyze = async () => {
     if (!mode) return;
     setState('analyzing');
     setIsLoading(true);
+    setError(null);
     try {
       const finalResult = await generateFinalAnalysis(messages, mode);
       setResult(finalResult);
       setState('result');
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setError(e.message || t.errorQuota);
       setState('chatting');
-    } finally { setIsLoading(false); }
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   const reset = () => {
@@ -154,6 +224,7 @@ const App: React.FC = () => {
     setResult(null);
     setMode(null);
     setCanFinishEarly(false);
+    setError(null);
   };
 
   const exportAsImage = async (ref: React.RefObject<HTMLDivElement>, filename: string) => {
@@ -221,6 +292,44 @@ const App: React.FC = () => {
     );
   }
 
+  if (state === 'intensity_select') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
+        <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] bg-blue-100/30 rounded-full blur-[120px]"></div>
+        <div className="max-w-2xl w-full text-center space-y-12 z-10">
+          <div className="space-y-6">
+            <button onClick={() => setState('landing')} className="text-slate-400 hover:text-indigo-600 font-bold flex items-center gap-2 mx-auto transition-colors">
+              <ArrowRight className="rotate-180" size={16} /> {t.backBtn}
+            </button>
+            <h1 className="text-5xl font-serif font-bold text-slate-900">{t.intensityTitle}</h1>
+            <p className="text-lg text-slate-500 font-heiti">{t.intensityDesc}</p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-8">
+            <button onClick={() => selectIntensity('QUICK')} className="group p-12 bg-white rounded-[3rem] border border-transparent hover:border-indigo-100 hover:shadow-2xl transition-all text-left space-y-6">
+              <div className="w-16 h-16 bg-yellow-50 text-yellow-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Timer size={32} />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-slate-800">{t.intensityQuick}</h3>
+                <p className="text-slate-400 mt-2 leading-relaxed">{t.intensityQuickDesc}</p>
+              </div>
+            </button>
+            <button onClick={() => selectIntensity('DEEP')} className="group p-12 bg-white rounded-[3rem] border border-transparent hover:border-blue-100 hover:shadow-2xl transition-all text-left space-y-6">
+              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <InfinityIcon size={32} />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-slate-800">{t.intensityDeep}</h3>
+                <p className="text-slate-400 mt-2 leading-relaxed">{t.intensityDeepDesc}</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (state === 'analyzing') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white">
@@ -259,10 +368,8 @@ const App: React.FC = () => {
              </div>
           </div>
 
-          {/* Main Report Container - Single Column Layout for Better Visibility */}
+          {/* Main Report Container */}
           <div ref={reportContainerRef} className="bg-white p-12 md:p-24 rounded-[4rem] shadow-xl border border-slate-50 space-y-32 export-container relative overflow-hidden flex flex-col items-center">
-            
-            {/* Header Module */}
             <div className="text-center space-y-10 w-full max-w-2xl">
               <div className="inline-flex items-center gap-3 px-6 py-2 bg-slate-900 text-white rounded-full text-[10px] font-bold uppercase tracking-[0.4em]">
                 <Zap size={12} className="text-indigo-400" /> {t.resultTitle}
@@ -272,7 +379,6 @@ const App: React.FC = () => {
               </h1>
             </div>
 
-            {/* Summary Module */}
             <div className="w-full max-w-3xl space-y-8 text-center">
               <div className="flex items-center justify-center gap-4 text-indigo-600 text-[11px] font-bold uppercase tracking-[0.3em]">
                 <div className="w-8 h-px bg-indigo-200"></div> 
@@ -284,7 +390,6 @@ const App: React.FC = () => {
               </p>
             </div>
 
-            {/* Energy Matrix Module - Central Grid */}
             <div className="w-full max-w-2xl bg-slate-50/50 p-12 md:p-16 rounded-[4rem] border border-slate-100 shadow-inner space-y-12">
               <div className="text-center space-y-2">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-[0.4em] mb-4">{t.dimensionTitle}</h3>
@@ -308,7 +413,6 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Insights Module - Clean Staggered List */}
             <div className="w-full max-w-3xl space-y-12">
               <div className="flex items-center justify-center gap-4 text-blue-600 text-[11px] font-bold uppercase tracking-[0.3em]">
                 <Quote size={16} /> 真我洞察
@@ -325,7 +429,6 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Paths Module - Vertical Progress Cards */}
             <div className="w-full max-w-3xl space-y-12">
               <div className="flex items-center justify-center gap-4 text-teal-600 text-[11px] font-bold uppercase tracking-[0.3em]">
                 <Navigation size={18} /> 进化路径
@@ -342,7 +445,6 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Motto Module - Grand Finale */}
             <div className="w-full max-w-2xl">
               <div className="p-16 md:p-24 bg-slate-900 rounded-[5rem] text-white text-center space-y-10 shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-500/10 to-transparent pointer-events-none"></div>
@@ -356,7 +458,6 @@ const App: React.FC = () => {
               </div>
             </div>
             
-            {/* Footer Tag */}
             <div className="pt-20 border-t border-slate-100 text-center flex flex-col items-center gap-6 w-full max-w-xl">
                <div className="flex items-center gap-3 text-slate-400 font-serif italic text-2xl">
                  <Compass size={28} className="text-indigo-600" /> Explorer's Compass
@@ -368,7 +469,6 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Hidden chat area for capture */}
         <div style={{ display: 'none' }}>
            <div ref={chatContainerRef} className="bg-white p-24 w-[1000px] flex flex-col gap-12 export-container">
              <div className="text-center border-b pb-12 mb-12">
@@ -376,7 +476,6 @@ const App: React.FC = () => {
                <div className="text-indigo-600 font-bold uppercase tracking-[0.3em]">{mode} FULL DIALOGUE</div>
              </div>
              {messages.map((m) => <ChatBubble key={m.id} message={m} language={lang} />)}
-             <div className="mt-12 pt-12 border-t text-center text-slate-300 italic font-serif">End of Discovery Session</div>
            </div>
         </div>
       </div>
@@ -393,14 +492,14 @@ const App: React.FC = () => {
           <div>
             <h1 className="font-serif font-bold text-slate-900 text-2xl">{t.title}</h1>
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
-              <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">{mode?.replace('_', ' ')}</p>
+              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${intensity === 'DEEP' ? 'bg-blue-500' : 'bg-indigo-500'}`}></div>
+              <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">{mode?.replace('_', ' ')} • {intensity}</p>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-8">
           <div className="hidden md:block w-48">
-            <ProgressBar current={questionCount} total={TARGET_QUESTIONS} />
+            <ProgressBar current={questionCount} total={intensity === 'QUICK' ? QUICK_TARGET : DEEP_TARGET} />
           </div>
           <button onClick={() => setLang(l => l === 'zh' ? 'en' : 'zh')} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
             <Languages size={24} />
@@ -411,6 +510,24 @@ const App: React.FC = () => {
       <main ref={scrollRef} className="flex-1 overflow-y-auto pt-16 pb-32 px-4 md:px-0">
         <div className="max-w-4xl mx-auto flex flex-col">
           {messages.map((m) => <ChatBubble key={m.id} message={m} language={lang} />)}
+          
+          {error && (
+            <div className="p-8 mx-auto max-w-2xl bg-red-50 border border-red-100 rounded-[2rem] text-center space-y-6 animate-in fade-in slide-in-from-top-4">
+              <div className="flex items-center justify-center gap-3 text-red-500">
+                <AlertCircle size={32} />
+                <h3 className="text-xl font-bold font-heiti">{lang === 'zh' ? '由于流量过大，连接暂时中断' : 'Connection interrupted due to heavy traffic'}</h3>
+              </div>
+              <p className="text-slate-600 leading-relaxed font-heiti">{error}</p>
+              <button 
+                onClick={handleRetry} 
+                className="px-8 py-4 bg-red-500 text-white rounded-2xl font-bold flex items-center gap-3 mx-auto hover:bg-red-600 transition-all shadow-lg shadow-red-100"
+              >
+                <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
+                {t.retryBtn}
+              </button>
+            </div>
+          )}
+
           {isLoading && (
             <div className="flex gap-3 p-10 items-center justify-center opacity-40">
               <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
@@ -432,14 +549,19 @@ const App: React.FC = () => {
                 onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 placeholder={t.inputPlaceholder}
                 rows={2}
-                className="flex-1 pl-10 pr-20 py-6 bg-slate-50 rounded-[2rem] border-2 border-transparent focus:border-indigo-500/20 focus:outline-none focus:bg-white text-2xl font-heiti transition-all resize-none shadow-inner"
+                disabled={!!error || isLoading}
+                className="flex-1 pl-10 pr-20 py-6 bg-slate-50 rounded-[2rem] border-2 border-transparent focus:border-indigo-500/20 focus:outline-none focus:bg-white text-2xl font-heiti transition-all resize-none shadow-inner disabled:opacity-50"
               />
-              <button onClick={handleSend} disabled={!input.trim() || isLoading} className="absolute right-4 bottom-4 p-5 bg-slate-900 text-white rounded-2xl hover:bg-black disabled:bg-slate-100 disabled:text-slate-300 shadow-2xl transition-all active:scale-90">
+              <button 
+                onClick={handleSend} 
+                disabled={!input.trim() || isLoading || !!error} 
+                className="absolute right-4 bottom-4 p-5 bg-slate-900 text-white rounded-2xl hover:bg-black disabled:bg-slate-100 disabled:text-slate-300 shadow-2xl transition-all active:scale-90"
+              >
                 <Send size={28} />
               </button>
             </div>
           </div>
-          {canFinishEarly && (
+          {canFinishEarly && !error && (
             <button onClick={analyze} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-bold flex items-center justify-center gap-4 hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <Sparkles size={24} /> 
               <span className="font-heiti tracking-[0.2em] text-xl">{t.finishBtn}</span>

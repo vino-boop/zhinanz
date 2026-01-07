@@ -1,6 +1,7 @@
 
 export type Language = 'zh' | 'en';
 export type DiscoveryMode = 'LIFE_MEANING' | 'CAREER' | 'TALENT';
+export type DiscoveryIntensity = 'QUICK' | 'DEEP';
 
 export interface Dimension {
   label: string;
@@ -23,4 +24,4 @@ export interface DiscoveryResult {
   dimensions: Dimension[];
 }
 
-export type AppState = 'landing' | 'mode_select' | 'chatting' | 'analyzing' | 'result';
+export type AppState = 'landing' | 'intensity_select' | 'chatting' | 'analyzing' | 'result';
