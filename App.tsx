@@ -21,7 +21,10 @@ import {
   FileImage,
   Layers,
   Zap,
-  Dna
+  Dna,
+  ShieldCheck,
+  Target,
+  Trophy
 } from 'lucide-react';
 
 declare const html2canvas: any;
@@ -49,9 +52,9 @@ const i18n = {
     langToggle: "Switch to English",
     finishBtn: "生成真我图谱报告",
     backBtn: "返回主页",
-    exportChat: "导出对话记录（长图）",
-    exportReport: "导出探索报告（画报）",
-    dimensionTitle: "能量矩阵与真实度评估",
+    exportChat: "导出对话记录",
+    exportReport: "导出人生图谱",
+    dimensionTitle: "真我能量矩阵",
   },
   en: {
     title: "Explorer's Compass",
@@ -72,9 +75,9 @@ const i18n = {
     langToggle: "切换至中文",
     finishBtn: "Generate Truth Map Report",
     backBtn: "Back to Home",
-    exportChat: "Export Chat History",
+    exportChat: "Export History",
     exportReport: "Export Truth Map",
-    dimensionTitle: "Energy Matrix & Authenticity",
+    dimensionTitle: "Authenticity Energy Matrix",
   }
 };
 
@@ -156,7 +159,6 @@ const App: React.FC = () => {
   const exportAsImage = async (ref: React.RefObject<HTMLDivElement>, filename: string) => {
     if (!ref.current) return;
     try {
-      // 临时显示隐藏的容器
       const isChat = filename.includes('Chat');
       if (isChat) ref.current.parentElement!.style.display = 'block';
       
@@ -239,125 +241,134 @@ const App: React.FC = () => {
 
   if (state === 'result' && result) {
     return (
-      <div className="min-h-screen bg-white py-12 px-4 md:px-8">
-        <div className="max-w-6xl mx-auto flex flex-col gap-8">
+      <div className="min-h-screen bg-slate-50/50 py-12 px-4 md:px-8">
+        <div className="max-w-4xl mx-auto flex flex-col gap-10">
           
-          <div className="flex flex-wrap justify-between items-center gap-4 bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 sticky top-4 z-50">
-             <button onClick={reset} className="flex items-center gap-2 px-6 py-3 bg-white text-slate-700 rounded-2xl shadow-sm hover:shadow-md transition-all font-bold">
-               <ArrowRight className="rotate-180" size={18} /> {t.backBtn}
+          {/* Top Sticky Toolbar */}
+          <div className="flex flex-wrap justify-between items-center gap-4 bg-white/90 backdrop-blur-md p-5 rounded-[2rem] border border-slate-100 sticky top-4 z-50 shadow-sm">
+             <button onClick={reset} className="flex items-center gap-2 px-6 py-3 text-slate-500 hover:text-indigo-600 transition-colors font-bold text-sm">
+               <ArrowRight className="rotate-180" size={16} /> {t.backBtn}
              </button>
              <div className="flex gap-3">
-                <button onClick={() => exportAsImage(reportContainerRef, `Truth_Map_${Date.now()}`)} className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">
+                <button onClick={() => exportAsImage(reportContainerRef, `Truth_Map_${Date.now()}`)} className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">
                   <FileImage size={18} /> {t.exportReport}
                 </button>
-                <button onClick={() => exportAsImage(chatContainerRef, `Chat_History_${Date.now()}`)} className="flex items-center gap-2 px-6 py-3 bg-white text-indigo-600 border border-indigo-100 rounded-2xl font-bold shadow-sm hover:shadow-md transition-all">
+                <button onClick={() => exportAsImage(chatContainerRef, `Chat_History_${Date.now()}`)} className="flex items-center gap-2 px-5 py-2.5 bg-white text-indigo-600 border border-indigo-100 rounded-xl text-sm font-bold shadow-sm hover:shadow-md transition-all">
                   <Layers size={18} /> {t.exportChat}
                 </button>
              </div>
           </div>
 
-          <div ref={reportContainerRef} className="bg-white p-12 md:p-24 rounded-[4rem] shadow-sm border border-slate-50 space-y-24 export-container relative overflow-hidden">
-            {/* Background Decoration */}
-            <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-50/30 rounded-full blur-[100px] -z-10 translate-x-1/2 -translate-y-1/2"></div>
+          {/* Main Report Container - Single Column Layout for Better Visibility */}
+          <div ref={reportContainerRef} className="bg-white p-12 md:p-24 rounded-[4rem] shadow-xl border border-slate-50 space-y-32 export-container relative overflow-hidden flex flex-col items-center">
             
-            <div className="text-center space-y-10">
-              <div className="inline-flex items-center gap-3 px-8 py-3 bg-slate-900 text-white rounded-full text-xs font-bold uppercase tracking-[0.3em]">
-                <Zap size={14} className="text-indigo-400" /> {t.resultTitle}
+            {/* Header Module */}
+            <div className="text-center space-y-10 w-full max-w-2xl">
+              <div className="inline-flex items-center gap-3 px-6 py-2 bg-slate-900 text-white rounded-full text-[10px] font-bold uppercase tracking-[0.4em]">
+                <Zap size={12} className="text-indigo-400" /> {t.resultTitle}
               </div>
-              <h1 className="text-6xl md:text-8xl font-serif font-bold text-slate-900 leading-tight">
+              <h1 className="text-5xl md:text-7xl font-serif font-bold text-slate-900 leading-[1.15]">
                 {parseBilingual(result.title)}
               </h1>
             </div>
 
-            <div className="grid lg:grid-cols-12 gap-20 items-start">
-              <div className="lg:col-span-7 space-y-20">
-                <section className="space-y-8">
-                  <div className="flex items-center gap-4 text-indigo-600 text-sm font-bold uppercase tracking-[0.2em]">
-                    <div className="w-12 h-px bg-indigo-600/30"></div> 灵魂本色剖析
-                  </div>
-                  <div className="text-3xl md:text-4xl text-slate-800 leading-[1.6] font-serif italic text-justify px-4">
-                    {parseBilingual(result.summary)}
-                  </div>
-                </section>
-
-                <section className="space-y-12 bg-slate-50/50 p-12 rounded-[4rem] border border-slate-100">
-                  <div className="flex items-center gap-4 text-teal-600 text-sm font-bold uppercase tracking-[0.2em]">
-                    <Navigation size={20} /> 进化之径
-                  </div>
-                  <div className="grid gap-10">
-                    {result.suggestedPaths.map((p, i) => (
-                      <div key={i} className="flex items-start gap-8 group">
-                        <div className="w-14 h-14 bg-white rounded-[1.5rem] flex-shrink-0 flex items-center justify-center text-teal-600 font-serif text-2xl font-bold shadow-md group-hover:bg-teal-600 group-hover:text-white transition-all">
-                          {i+1}
-                        </div>
-                        <p className="text-2xl text-slate-700 font-heiti pt-2 leading-relaxed">{parseBilingual(p)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+            {/* Summary Module */}
+            <div className="w-full max-w-3xl space-y-8 text-center">
+              <div className="flex items-center justify-center gap-4 text-indigo-600 text-[11px] font-bold uppercase tracking-[0.3em]">
+                <div className="w-8 h-px bg-indigo-200"></div> 
+                灵魂剖析
+                <div className="w-8 h-px bg-indigo-200"></div>
               </div>
+              <p className="text-2xl md:text-3xl text-slate-700 leading-[1.8] font-serif italic text-justify px-4 border-l-4 border-indigo-500/20 pl-8">
+                {parseBilingual(result.summary)}
+              </p>
+            </div>
 
-              <div className="lg:col-span-5 space-y-16">
-                {/* Visual Analysis Chart */}
-                <section className="bg-white p-12 rounded-[3.5rem] border-2 border-slate-100 shadow-2xl shadow-slate-100/50 space-y-10 relative overflow-hidden">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-slate-900 text-sm font-bold uppercase tracking-widest">
-                       {t.dimensionTitle}
+            {/* Energy Matrix Module - Central Grid */}
+            <div className="w-full max-w-2xl bg-slate-50/50 p-12 md:p-16 rounded-[4rem] border border-slate-100 shadow-inner space-y-12">
+              <div className="text-center space-y-2">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-[0.4em] mb-4">{t.dimensionTitle}</h3>
+                <div className="h-px w-20 bg-indigo-600/20 mx-auto"></div>
+              </div>
+              <div className="space-y-10">
+                {result.dimensions?.map((dim, i) => (
+                  <div key={i} className="space-y-4">
+                    <div className="flex justify-between items-end px-2">
+                      <span className="text-lg font-bold text-slate-700 font-heiti">{parseBilingual(dim.label)}</span>
+                      <span className="text-xl font-serif italic text-indigo-600">{dim.value}%</span>
                     </div>
-                    <Dna className="text-indigo-600/20" size={32} />
+                    <div className="w-full bg-slate-200/50 h-5 rounded-full overflow-hidden p-1 shadow-inner">
+                      <div 
+                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 shadow-md shadow-indigo-100/50 transition-all duration-[1.5s] ease-out"
+                        style={{ width: `${dim.value}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-8">
-                    {result.dimensions?.map((dim, i) => (
-                      <div key={i} className="space-y-3">
-                        <div className="flex justify-between items-end">
-                          <span className="text-lg font-bold text-slate-700 font-heiti">{parseBilingual(dim.label)}</span>
-                          <span className="text-2xl font-serif italic text-indigo-600">{dim.value}%</span>
-                        </div>
-                        <div className="w-full bg-slate-100 h-6 rounded-2xl overflow-hidden p-1">
-                          <div 
-                            className="h-full rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-blue-500 shadow-lg shadow-indigo-100 transition-all duration-1000 ease-out"
-                            style={{ width: `${dim.value}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+                ))}
+              </div>
+            </div>
 
-                <section className="space-y-10 px-6">
-                  <div className="flex items-center gap-3 text-blue-600 text-sm font-bold uppercase tracking-widest">
-                    <Quote size={20} /> 真我洞察
+            {/* Insights Module - Clean Staggered List */}
+            <div className="w-full max-w-3xl space-y-12">
+              <div className="flex items-center justify-center gap-4 text-blue-600 text-[11px] font-bold uppercase tracking-[0.3em]">
+                <Quote size={16} /> 真我洞察
+              </div>
+              <div className="grid md:grid-cols-2 gap-10">
+                {result.keyInsights.map((ins, i) => (
+                  <div key={i} className="flex gap-6 items-start bg-slate-50/30 p-8 rounded-3xl border border-slate-50 transition-all hover:bg-white hover:shadow-md">
+                     <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center flex-shrink-0 text-blue-400">
+                        <Target size={20} />
+                     </div>
+                     <p className="text-lg text-slate-600 leading-relaxed font-heiti">{parseBilingual(ins)}</p>
                   </div>
-                  <div className="space-y-10">
-                    {result.keyInsights.map((ins, i) => (
-                      <div key={i} className="flex gap-6 items-start">
-                         <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 flex-shrink-0" />
-                         <p className="text-xl text-slate-600 leading-relaxed font-heiti">{parseBilingual(ins)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+                ))}
+              </div>
+            </div>
 
-                <div className="p-16 bg-slate-900 rounded-[4rem] text-white text-center space-y-8 shadow-2xl relative">
-                   <Quote className="absolute top-10 left-10 text-white/10" size={64} />
-                   <p className="text-xs tracking-[0.4em] opacity-40 uppercase font-bold">Life Code</p>
-                   <h3 className="text-4xl font-serif italic font-bold leading-relaxed relative z-10 text-indigo-100">
-                     "{parseBilingual(result.motto)}"
-                   </h3>
+            {/* Paths Module - Vertical Progress Cards */}
+            <div className="w-full max-w-3xl space-y-12">
+              <div className="flex items-center justify-center gap-4 text-teal-600 text-[11px] font-bold uppercase tracking-[0.3em]">
+                <Navigation size={18} /> 进化路径
+              </div>
+              <div className="space-y-8">
+                {result.suggestedPaths.map((p, i) => (
+                  <div key={i} className="flex items-center gap-10 p-10 bg-white rounded-[3rem] border-2 border-slate-50 group hover:border-teal-100 transition-all shadow-sm">
+                    <div className="w-16 h-16 bg-teal-50 rounded-2xl flex-shrink-0 flex items-center justify-center text-teal-600 font-serif text-3xl font-bold transition-all group-hover:bg-teal-600 group-hover:text-white">
+                      {i+1}
+                    </div>
+                    <p className="text-2xl text-slate-800 font-heiti leading-relaxed">{parseBilingual(p)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Motto Module - Grand Finale */}
+            <div className="w-full max-w-2xl">
+              <div className="p-16 md:p-24 bg-slate-900 rounded-[5rem] text-white text-center space-y-10 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-500/10 to-transparent pointer-events-none"></div>
+                <Quote className="mx-auto text-indigo-400/20" size={60} />
+                <div className="space-y-4">
+                  <p className="text-[10px] tracking-[0.5em] opacity-40 uppercase font-bold">Life Creed</p>
+                  <h3 className="text-4xl md:text-5xl font-serif italic font-bold leading-relaxed text-indigo-100">
+                    "{parseBilingual(result.motto)}"
+                  </h3>
                 </div>
               </div>
             </div>
             
-            <div className="pt-20 border-t border-slate-100 text-center flex flex-col items-center gap-4">
-               <div className="flex items-center gap-3 text-slate-300 font-serif italic text-xl">
-                 <Compass size={24} /> Explorer's Compass
+            {/* Footer Tag */}
+            <div className="pt-20 border-t border-slate-100 text-center flex flex-col items-center gap-6 w-full max-w-xl">
+               <div className="flex items-center gap-3 text-slate-400 font-serif italic text-2xl">
+                 <Compass size={28} className="text-indigo-600" /> Explorer's Compass
                </div>
-               <p className="text-slate-300 text-sm uppercase tracking-widest">Generated by AI Soul Navigator • {new Date().toLocaleDateString()}</p>
+               <p className="text-slate-300 text-[10px] uppercase tracking-[0.5em] font-bold">
+                 Generated by AI Soul Navigator • {new Date().toLocaleDateString()}
+               </p>
             </div>
           </div>
         </div>
 
-        {/* Hidden chat area for long screenshot capture */}
+        {/* Hidden chat area for capture */}
         <div style={{ display: 'none' }}>
            <div ref={chatContainerRef} className="bg-white p-24 w-[1000px] flex flex-col gap-12 export-container">
              <div className="text-center border-b pb-12 mb-12">
