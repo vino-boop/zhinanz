@@ -1,34 +1,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Message, DiscoveryResult, AppState, Language, DiscoveryMode, DiscoveryIntensity, Dimension } from './types';
+import { Message, DiscoveryResult, AppState, Language, DiscoveryMode, DiscoveryIntensity } from './types';
 import { getNextQuestion, generateFinalAnalysis } from './services/geminiService';
 import { ChatBubble } from './components/ChatBubble';
 import { ProgressBar } from './components/ProgressBar';
 import { 
-  Compass, 
-  Send, 
-  RefreshCw, 
-  Sparkles, 
-  ArrowRight, 
-  ChevronRight, 
-  Lightbulb, 
-  Navigation,
-  Quote,
-  Languages,
-  Briefcase,
-  Heart,
-  ScrollText,
-  FileImage,
-  Layers,
-  Zap,
-  Dna,
-  ShieldCheck,
-  Target,
-  Trophy,
-  Activity,
-  Infinity as InfinityIcon,
-  Timer,
-  AlertCircle
+  Compass, Send, RefreshCw, Sparkles, ArrowRight, Quote, Languages, Briefcase, Heart, 
+  ScrollText, FileImage, Layers, Zap, Dna, Target, Navigation, Timer, Infinity as InfinityIcon, AlertCircle
 } from 'lucide-react';
 
 declare const html2canvas: any;
@@ -40,10 +18,10 @@ const i18n = {
   zh: {
     title: "探索者指南针",
     subtitle: "从心出发，发现方向",
-    landingDesc: "这不是一次普通的测试，而是一场关于真实的对峙。请选择一个领域，我们将通过层层追问，剥离社会人格，寻找你的真实原点。",
+    landingDesc: "这不是一次普通的测试，而是一场关于真实的对峙。请选择一个领域，寻找你的真实原点。",
     beginBtn: "开启旅程",
     intensityTitle: "选择对话强度",
-    intensityDesc: "深度的旅程需要更多的时间与勇气，快速的相遇则直击本质。",
+    intensityDesc: "深度的旅程需要更多勇气，快速的相遇则直击本质。",
     modeLife: "人生意义",
     modeLifeDesc: "关于存在、痛苦与终极价值",
     modeCareer: "职业方向",
@@ -51,53 +29,51 @@ const i18n = {
     modeTalent: "天赋爱好",
     modeTalentDesc: "关于热忱、心流与感官本能",
     intensityQuick: "快速相遇",
-    intensityQuickDesc: "直击要害，7-10轮对话快速生成图谱",
+    intensityQuickDesc: "7-10轮对话，快速生成报告",
     intensityDeep: "深度对话",
-    intensityDeepDesc: "不限次数，深入潜意识，15轮后可随时生成",
-    analyzingTitle: "正在解析你的真我能量...",
-    analyzingDesc: "AI 正在对比你的理想化陈述与本能反馈，编织属于你的灵魂图谱。",
+    intensityDeepDesc: "15轮后可随时生成，深入潜意识",
+    analyzingTitle: "正在解析真我能量...",
+    analyzingDesc: "AI 正在编织属于你的灵魂图谱。",
     resultTitle: "探索终局报告",
-    restart: "重新开启旅程",
-    inputPlaceholder: "请在深思后给出最本能的回答...",
+    inputPlaceholder: "请给出最本能的回答...",
     langToggle: "Switch to English",
-    finishBtn: "生成真我图谱报告",
+    finishBtn: "生成报告",
     backBtn: "返回",
-    exportChat: "导出对话记录",
-    exportReport: "导出人生图谱",
-    dimensionTitle: "真我能量矩阵",
-    errorQuota: "灵感已枯竭或服务器过载。请稍后再试或检查 API 配额。",
-    retryBtn: "重试最后一次对话",
+    exportChat: "对话记录",
+    exportReport: "保存图谱",
+    dimensionTitle: "能量矩阵",
+    errorQuota: "连接暂时中断，请重试。",
+    retryBtn: "重新发送",
   },
   en: {
     title: "Explorer's Compass",
     subtitle: "Navigate Your Soul",
-    landingDesc: "This is not a regular test, but a confrontation with reality. Choose a path, and we'll peel away your social persona to find your true origin.",
-    beginBtn: "Start Journey",
-    intensityTitle: "Choose Dialogue Intensity",
-    intensityDesc: "Deep journeys require more time and courage, while quick encounters hit the essence immediately.",
-    modeLife: "Meaning of Life",
-    modeLifeDesc: "Existence, Pain, & Ultimate Values",
+    landingDesc: "This is a confrontation with reality. Choose a path to find your true origin.",
+    beginBtn: "Start",
+    intensityTitle: "Dialogue Intensity",
+    intensityDesc: "Deep journeys need courage; quick ones hit the essence.",
+    modeLife: "Life Meaning",
+    modeLifeDesc: "Existence & Values",
     modeCareer: "Career Path",
-    modeCareerDesc: "Power, Security, & Alienation",
-    modeTalent: "Talent & Passion",
-    modeTalentDesc: "Enthusiasm, Flow, & Instinct",
-    intensityQuick: "Quick Encounter",
-    intensityQuickDesc: "Direct hits, 7-10 rounds to quickly generate a map",
-    intensityDeep: "Deep Dialogue",
-    intensityDeepDesc: "Unlimited rounds, diving deep, available to finish after round 15",
-    analyzingTitle: "Decoding Your Energy...",
-    analyzingDesc: "AI is cross-referencing your statements with instinctive pulses to weave your map.",
-    resultTitle: "Final Discovery Report",
-    restart: "Start New Discovery",
-    inputPlaceholder: "Answer with your deepest instinct...",
-    langToggle: "切换至中文",
-    finishBtn: "Generate Truth Map Report",
+    modeCareerDesc: "Power & Security",
+    modeTalent: "Passion",
+    modeTalentDesc: "Flow & Instinct",
+    intensityQuick: "Quick",
+    intensityQuickDesc: "7-10 rounds for a quick map",
+    intensityDeep: "Deep",
+    intensityDeepDesc: "Diving deep, unlimited rounds",
+    analyzingTitle: "Decoding Energy...",
+    analyzingDesc: "AI is weaving your soul map.",
+    resultTitle: "Final Report",
+    inputPlaceholder: "Answer with instinct...",
+    langToggle: "中文",
+    finishBtn: "Generate Report",
     backBtn: "Back",
-    exportChat: "Export History",
-    exportReport: "Export Truth Map",
-    dimensionTitle: "Authenticity Energy Matrix",
-    errorQuota: "Inspiration exhausted or server overloaded. Please wait a moment or check your API quota.",
-    retryBtn: "Retry last dialogue",
+    exportChat: "Chat History",
+    exportReport: "Save Map",
+    dimensionTitle: "Energy Matrix",
+    errorQuota: "Connection failed, please retry.",
+    retryBtn: "Retry",
   }
 };
 
@@ -120,170 +96,93 @@ const App: React.FC = () => {
   const t = i18n[lang];
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isLoading]);
 
-  const selectMode = (m: DiscoveryMode) => {
-    setMode(m);
-    setState('intensity_select');
+  // Fix: Added reset function to clear application state and return to landing screen.
+  const reset = () => {
+    setState('landing');
+    setMode(null);
+    setIntensity('QUICK');
+    setMessages([]);
+    setInput('');
+    setIsLoading(false);
+    setError(null);
+    setResult(null);
+    setQuestionCount(0);
+    setCanFinishEarly(false);
   };
 
-  const selectIntensity = (i: DiscoveryIntensity) => {
-    setIntensity(i);
-    setState('chatting');
-    if (mode) startJourney(mode, i);
+  const selectMode = (m: DiscoveryMode) => { setMode(m); setState('intensity_select'); };
+  const selectIntensity = (i: DiscoveryIntensity) => { 
+    setIntensity(i); setState('chatting'); 
+    if (mode) startJourney(mode, i); 
   };
 
   const startJourney = async (m: DiscoveryMode, i: DiscoveryIntensity) => {
-    setIsLoading(true);
-    setError(null);
+    setIsLoading(true); setError(null);
     try {
-      const initialMessage: Message = { id: 'start', role: 'user', content: 'START', timestamp: Date.now() };
-      const firstQuestion = await getNextQuestion([initialMessage], m, i);
-      setMessages([{ id: Date.now().toString(), role: 'assistant', content: firstQuestion, timestamp: Date.now() }]);
+      const firstQ = await getNextQuestion([{ id: 's', role: 'user', content: 'START', timestamp: Date.now() }], m, i);
+      setMessages([{ id: Date.now().toString(), role: 'assistant', content: firstQ, timestamp: Date.now() }]);
       setQuestionCount(1);
-    } catch (e: any) {
-      setError(e.message || t.errorQuota);
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (e: any) { setError(e.message || t.errorQuota); }
+    finally { setIsLoading(false); }
   };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading || !mode) return;
-    const userMessage: Message = { id: Date.now().toString(), role: 'user', content: input, timestamp: Date.now() };
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
-    setError(null);
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input, timestamp: Date.now() };
+    setMessages(prev => [...prev, userMsg]);
+    setInput(''); setIsLoading(true); setError(null);
     try {
-      const nextQRaw = await getNextQuestion([...messages, userMessage], mode, intensity);
-      
-      const isQuickFinished = intensity === 'QUICK' && (nextQRaw.includes('[DONE]') || questionCount >= QUICK_TARGET);
-      const isDeepFinished = intensity === 'DEEP' && (questionCount >= DEEP_TARGET);
-      
-      if (isQuickFinished || isDeepFinished) setCanFinishEarly(true);
-      
-      const nextQ = nextQRaw.replace('[DONE]', '').trim();
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: nextQ, timestamp: Date.now() }]);
+      const nextQRaw = await getNextQuestion([...messages, userMsg], mode, intensity);
+      if (intensity === 'QUICK' && (nextQRaw.includes('[DONE]') || questionCount >= QUICK_TARGET)) setCanFinishEarly(true);
+      if (intensity === 'DEEP' && questionCount >= DEEP_TARGET) setCanFinishEarly(true);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: nextQRaw.replace('[DONE]', '').trim(), timestamp: Date.now() }]);
       setQuestionCount(prev => prev + 1);
-    } catch (e: any) {
-      setError(e.message || t.errorQuota);
-    } finally { 
-      setIsLoading(false); 
-    }
-  };
-
-  const handleRetry = async () => {
-    if (isLoading || !mode) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      // Find the last user message to retry the prompt
-      const history = [...messages];
-      const nextQRaw = await getNextQuestion(history, mode, intensity);
-      
-      const isQuickFinished = intensity === 'QUICK' && (nextQRaw.includes('[DONE]') || questionCount >= QUICK_TARGET);
-      const isDeepFinished = intensity === 'DEEP' && (questionCount >= DEEP_TARGET);
-      
-      if (isQuickFinished || isDeepFinished) setCanFinishEarly(true);
-      
-      const nextQ = nextQRaw.replace('[DONE]', '').trim();
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: nextQ, timestamp: Date.now() }]);
-      setQuestionCount(prev => prev + 1);
-    } catch (e: any) {
-      setError(e.message || t.errorQuota);
-    } finally { 
-      setIsLoading(false); 
-    }
+    } catch (e: any) { setError(e.message || t.errorQuota); }
+    finally { setIsLoading(false); }
   };
 
   const analyze = async () => {
     if (!mode) return;
-    setState('analyzing');
-    setIsLoading(true);
-    setError(null);
+    setState('analyzing'); setIsLoading(true);
     try {
-      const finalResult = await generateFinalAnalysis(messages, mode);
-      setResult(finalResult);
-      setState('result');
-    } catch (e: any) {
-      setError(e.message || t.errorQuota);
-      setState('chatting');
-    } finally { 
-      setIsLoading(false); 
-    }
-  };
-
-  const reset = () => {
-    setState('landing');
-    setMessages([]);
-    setQuestionCount(0);
-    setResult(null);
-    setMode(null);
-    setCanFinishEarly(false);
-    setError(null);
+      const res = await generateFinalAnalysis(messages, mode);
+      setResult(res); setState('result');
+    } catch (e: any) { setError(e.message); setState('chatting'); }
+    finally { setIsLoading(false); }
   };
 
   const exportAsImage = async (ref: React.RefObject<HTMLDivElement>, filename: string) => {
     if (!ref.current) return;
-    try {
-      const isChat = filename.includes('Chat');
-      if (isChat) ref.current.parentElement!.style.display = 'block';
-      
-      const canvas = await html2canvas(ref.current, {
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        scale: 2,
-        logging: false,
-      });
-      
-      if (isChat) ref.current.parentElement!.style.display = 'none';
-
-      const link = document.createElement('a');
-      link.download = `${filename}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    } catch (e) { console.error('Export failed', e); }
+    const isChat = filename.includes('Chat');
+    if (isChat) ref.current.parentElement!.style.display = 'block';
+    const canvas = await html2canvas(ref.current, { useCORS: true, backgroundColor: '#ffffff', scale: 2 });
+    if (isChat) ref.current.parentElement!.style.display = 'none';
+    const link = document.createElement('a');
+    link.download = `${filename}.png`; link.href = canvas.toDataURL(); link.click();
   };
 
   const parseBilingual = (text: string) => {
     const parts = text.split('[SEP]');
-    if (parts.length < 2) return text;
-    return (lang === 'zh' ? parts[0] : parts[1]).trim();
+    return (lang === 'zh' ? parts[0] : (parts[1] || parts[0])).trim();
   };
 
   if (state === 'landing') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-indigo-100/30 rounded-full blur-[120px]"></div>
-        <button onClick={() => setLang(l => l === 'zh' ? 'en' : 'zh')} className="absolute top-8 right-8 px-5 py-2.5 bg-white/80 backdrop-blur rounded-full shadow-sm hover:shadow-md transition-all text-xs font-bold text-indigo-600 border border-indigo-50">
-          <Languages size={14} className="inline mr-2" /> {t.langToggle}
-        </button>
-
-        <div className="max-w-4xl w-full text-center space-y-12 z-10">
-          <div className="space-y-6">
-            <h1 className="text-6xl md:text-7xl font-serif font-bold text-slate-900 tracking-tight">{t.title}</h1>
-            <h2 className="text-xl md:text-2xl font-heiti text-indigo-500 uppercase tracking-widest">{t.subtitle}</h2>
-            <p className="text-lg md:text-xl text-slate-500 leading-relaxed max-w-2xl mx-auto font-heiti">{t.landingDesc}</p>
+        <button onClick={() => setLang(l => l === 'zh' ? 'en' : 'zh')} className="absolute top-8 right-8 px-5 py-2.5 bg-white shadow-sm rounded-full text-xs font-bold text-indigo-600">{t.langToggle}</button>
+        <div className="max-w-4xl text-center space-y-12 z-10">
+          <div className="space-y-4">
+            <h1 className="text-6xl font-serif font-bold text-slate-900">{t.title}</h1>
+            <p className="text-xl text-slate-500 font-heiti">{t.landingDesc}</p>
           </div>
-
-          <div className="grid md:grid-cols-3 gap-8 mt-16">
-            {[
-              { id: 'LIFE_MEANING', icon: ScrollText, label: t.modeLife, desc: t.modeLifeDesc, color: 'text-indigo-600 bg-indigo-50' },
-              { id: 'CAREER', icon: Briefcase, label: t.modeCareer, desc: t.modeCareerDesc, color: 'text-blue-600 bg-blue-50' },
-              { id: 'TALENT', icon: Heart, label: t.modeTalent, desc: t.modeTalentDesc, color: 'text-teal-600 bg-teal-50' },
-            ].map((m) => (
-              <button key={m.id} onClick={() => selectMode(m.id as DiscoveryMode)} className="group p-10 bg-white rounded-[3rem] border border-transparent hover:border-indigo-100 hover:shadow-2xl transition-all text-left space-y-5">
-                <div className={`w-16 h-16 ${m.color} rounded-2xl flex items-center justify-center group-hover:rotate-12 transition-transform`}>
-                  <m.icon size={32} />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-800 font-heiti">{m.label}</h3>
-                  <p className="text-slate-400 text-sm mt-2 font-heiti leading-relaxed">{m.desc}</p>
-                </div>
+          <div className="grid md:grid-cols-3 gap-8">
+            {[{id:'LIFE_MEANING', icon:ScrollText, label:t.modeLife}, {id:'CAREER', icon:Briefcase, label:t.modeCareer}, {id:'TALENT', icon:Heart, label:t.modeTalent}].map(m => (
+              <button key={m.id} onClick={() => selectMode(m.id as DiscoveryMode)} className="p-10 bg-white rounded-[2rem] shadow-sm hover:shadow-xl transition-all text-center space-y-4">
+                <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto"><m.icon size={32}/></div>
+                <h3 className="text-2xl font-bold text-slate-800">{m.label}</h3>
               </button>
             ))}
           </div>
@@ -294,35 +193,19 @@ const App: React.FC = () => {
 
   if (state === 'intensity_select') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
-        <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] bg-blue-100/30 rounded-full blur-[120px]"></div>
-        <div className="max-w-2xl w-full text-center space-y-12 z-10">
-          <div className="space-y-6">
-            <button onClick={() => setState('landing')} className="text-slate-400 hover:text-indigo-600 font-bold flex items-center gap-2 mx-auto transition-colors">
-              <ArrowRight className="rotate-180" size={16} /> {t.backBtn}
-            </button>
-            <h1 className="text-5xl font-serif font-bold text-slate-900">{t.intensityTitle}</h1>
-            <p className="text-lg text-slate-500 font-heiti">{t.intensityDesc}</p>
-          </div>
-
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50">
+        <div className="max-w-2xl text-center space-y-12">
+          <h1 className="text-5xl font-serif font-bold">{t.intensityTitle}</h1>
           <div className="grid md:grid-cols-2 gap-8">
-            <button onClick={() => selectIntensity('QUICK')} className="group p-12 bg-white rounded-[3rem] border border-transparent hover:border-indigo-100 hover:shadow-2xl transition-all text-left space-y-6">
-              <div className="w-16 h-16 bg-yellow-50 text-yellow-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Timer size={32} />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-slate-800">{t.intensityQuick}</h3>
-                <p className="text-slate-400 mt-2 leading-relaxed">{t.intensityQuickDesc}</p>
-              </div>
+            <button onClick={() => selectIntensity('QUICK')} className="p-10 bg-white rounded-[2rem] shadow-sm hover:shadow-xl transition-all text-left space-y-4">
+              <Timer className="text-yellow-600" size={32} />
+              <h3 className="text-2xl font-bold">{t.intensityQuick}</h3>
+              <p className="text-slate-400">{t.intensityQuickDesc}</p>
             </button>
-            <button onClick={() => selectIntensity('DEEP')} className="group p-12 bg-white rounded-[3rem] border border-transparent hover:border-blue-100 hover:shadow-2xl transition-all text-left space-y-6">
-              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <InfinityIcon size={32} />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-slate-800">{t.intensityDeep}</h3>
-                <p className="text-slate-400 mt-2 leading-relaxed">{t.intensityDeepDesc}</p>
-              </div>
+            <button onClick={() => selectIntensity('DEEP')} className="p-10 bg-white rounded-[2rem] shadow-sm hover:shadow-xl transition-all text-left space-y-4">
+              <InfinityIcon className="text-blue-600" size={32} />
+              <h3 className="text-2xl font-bold">{t.intensityDeep}</h3>
+              <p className="text-slate-400">{t.intensityDeepDesc}</p>
             </button>
           </div>
         </div>
@@ -332,241 +215,124 @@ const App: React.FC = () => {
 
   if (state === 'analyzing') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white">
-        <div className="text-center space-y-10 max-w-lg">
-          <Dna size={80} className="mx-auto text-indigo-400 animate-pulse" />
-          <div className="space-y-4">
-            <h2 className="text-4xl font-serif font-bold tracking-tight">{t.analyzingTitle}</h2>
-            <p className="text-slate-400 text-lg italic leading-relaxed">{t.analyzingDesc}</p>
-          </div>
-          <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-            <div className="bg-indigo-500 h-full w-full animate-[loading_4s_infinite]"></div>
-          </div>
-        </div>
-        <style>{`@keyframes loading { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }`}</style>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white">
+        <Dna size={80} className="text-indigo-400 animate-pulse mb-8" />
+        <h2 className="text-3xl font-serif">{t.analyzingTitle}</h2>
       </div>
     );
   }
 
   if (state === 'result' && result) {
     return (
-      <div className="min-h-screen bg-slate-50/50 py-12 px-4 md:px-8">
-        <div className="max-w-4xl mx-auto flex flex-col gap-10">
-          
-          {/* Top Sticky Toolbar */}
-          <div className="flex flex-wrap justify-between items-center gap-4 bg-white/90 backdrop-blur-md p-5 rounded-[2rem] border border-slate-100 sticky top-4 z-50 shadow-sm">
-             <button onClick={reset} className="flex items-center gap-2 px-6 py-3 text-slate-500 hover:text-indigo-600 transition-colors font-bold text-sm">
-               <ArrowRight className="rotate-180" size={16} /> {t.backBtn}
-             </button>
-             <div className="flex gap-3">
-                <button onClick={() => exportAsImage(reportContainerRef, `Truth_Map_${Date.now()}`)} className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">
-                  <FileImage size={18} /> {t.exportReport}
-                </button>
-                <button onClick={() => exportAsImage(chatContainerRef, `Chat_History_${Date.now()}`)} className="flex items-center gap-2 px-5 py-2.5 bg-white text-indigo-600 border border-indigo-100 rounded-xl text-sm font-bold shadow-sm hover:shadow-md transition-all">
-                  <Layers size={18} /> {t.exportChat}
-                </button>
+      <div className="min-h-screen bg-slate-50/50 py-12 px-4">
+        <div className="max-w-4xl mx-auto flex flex-col gap-8">
+          <div className="flex justify-between items-center bg-white/80 backdrop-blur p-4 rounded-3xl sticky top-4 z-50 shadow-sm border border-slate-100">
+             <button onClick={reset} className="px-4 py-2 text-slate-500 font-bold hover:text-indigo-600 flex items-center gap-2"><ArrowRight className="rotate-180" size={16}/>{t.backBtn}</button>
+             <div className="flex gap-2">
+                <button onClick={() => exportAsImage(reportContainerRef, 'Report')} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-100"><FileImage size={16}/>{t.exportReport}</button>
+                <button onClick={() => exportAsImage(chatContainerRef, 'Chat')} className="px-4 py-2 bg-white text-indigo-600 border border-indigo-100 rounded-xl text-sm font-bold flex items-center gap-2"><Layers size={16}/>{t.exportChat}</button>
              </div>
           </div>
 
-          {/* Main Report Container */}
-          <div ref={reportContainerRef} className="bg-white p-12 md:p-24 rounded-[4rem] shadow-xl border border-slate-50 space-y-32 export-container relative overflow-hidden flex flex-col items-center">
-            <div className="text-center space-y-10 w-full max-w-2xl">
-              <div className="inline-flex items-center gap-3 px-6 py-2 bg-slate-900 text-white rounded-full text-[10px] font-bold uppercase tracking-[0.4em]">
-                <Zap size={12} className="text-indigo-400" /> {t.resultTitle}
-              </div>
-              <h1 className="text-5xl md:text-7xl font-serif font-bold text-slate-900 leading-[1.15]">
-                {parseBilingual(result.title)}
-              </h1>
+          <div ref={reportContainerRef} className="bg-white p-12 md:p-20 rounded-[3rem] shadow-xl space-y-32 flex flex-col items-center export-container">
+            <div className="text-center space-y-8 w-full max-w-2xl py-10">
+              <div className="inline-block px-4 py-1 bg-slate-900 text-white rounded-full text-[10px] tracking-widest font-bold uppercase">{t.resultTitle}</div>
+              <h1 className="text-5xl md:text-6xl font-serif font-bold text-slate-900 leading-tight">{parseBilingual(result.title)}</h1>
+              <div className="w-16 h-1 bg-indigo-500 mx-auto rounded-full"></div>
             </div>
 
-            <div className="w-full max-w-3xl space-y-8 text-center">
-              <div className="flex items-center justify-center gap-4 text-indigo-600 text-[11px] font-bold uppercase tracking-[0.3em]">
-                <div className="w-8 h-px bg-indigo-200"></div> 
-                灵魂剖析
-                <div className="w-8 h-px bg-indigo-200"></div>
-              </div>
-              <p className="text-2xl md:text-3xl text-slate-700 leading-[1.8] font-serif italic text-justify px-4 border-l-4 border-indigo-500/20 pl-8">
-                {parseBilingual(result.summary)}
-              </p>
+            <div className="w-full max-w-3xl py-10 text-center space-y-8">
+              <h3 className="text-xs font-bold text-indigo-600 tracking-[0.3em] uppercase">灵魂剖析 / Analysis</h3>
+              <p className="text-2xl md:text-3xl text-slate-700 leading-relaxed font-serif italic italic px-8">"{parseBilingual(result.summary)}"</p>
             </div>
 
-            <div className="w-full max-w-2xl bg-slate-50/50 p-12 md:p-16 rounded-[4rem] border border-slate-100 shadow-inner space-y-12">
-              <div className="text-center space-y-2">
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-[0.4em] mb-4">{t.dimensionTitle}</h3>
-                <div className="h-px w-20 bg-indigo-600/20 mx-auto"></div>
-              </div>
+            <div className="w-full max-w-2xl py-10 space-y-12 bg-slate-50 p-12 rounded-[3rem]">
+              <h3 className="text-center text-xs font-bold text-slate-400 tracking-[0.3em] uppercase">{t.dimensionTitle}</h3>
               <div className="space-y-10">
                 {result.dimensions?.map((dim, i) => (
-                  <div key={i} className="space-y-4">
-                    <div className="flex justify-between items-end px-2">
-                      <span className="text-lg font-bold text-slate-700 font-heiti">{parseBilingual(dim.label)}</span>
-                      <span className="text-xl font-serif italic text-indigo-600">{dim.value}%</span>
-                    </div>
-                    <div className="w-full bg-slate-200/50 h-5 rounded-full overflow-hidden p-1 shadow-inner">
-                      <div 
-                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 shadow-md shadow-indigo-100/50 transition-all duration-[1.5s] ease-out"
-                        style={{ width: `${dim.value}%` }}
-                      />
-                    </div>
+                  <div key={i} className="space-y-3">
+                    <div className="flex justify-between font-heiti"><span className="text-slate-700">{parseBilingual(dim.label)}</span><span className="text-indigo-600">{dim.value}%</span></div>
+                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden"><div className="h-full bg-indigo-500 transition-all duration-1000" style={{width:`${dim.value}%`}}></div></div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="w-full max-w-3xl space-y-12">
-              <div className="flex items-center justify-center gap-4 text-blue-600 text-[11px] font-bold uppercase tracking-[0.3em]">
-                <Quote size={16} /> 真我洞察
-              </div>
-              <div className="grid md:grid-cols-2 gap-10">
+            <div className="w-full max-w-3xl py-10 space-y-12">
+              <h3 className="text-center text-xs font-bold text-blue-600 tracking-[0.3em] uppercase">真我洞察 / Insights</h3>
+              <div className="grid md:grid-cols-2 gap-8">
                 {result.keyInsights.map((ins, i) => (
-                  <div key={i} className="flex gap-6 items-start bg-slate-50/30 p-8 rounded-3xl border border-slate-50 transition-all hover:bg-white hover:shadow-md">
-                     <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center flex-shrink-0 text-blue-400">
-                        <Target size={20} />
-                     </div>
-                     <p className="text-lg text-slate-600 leading-relaxed font-heiti">{parseBilingual(ins)}</p>
+                  <div key={i} className="p-8 bg-white border border-slate-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all flex gap-4">
+                    <Target className="text-blue-400 flex-shrink-0" size={20}/>
+                    <p className="text-lg text-slate-600 leading-relaxed">{parseBilingual(ins)}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="w-full max-w-3xl space-y-12">
-              <div className="flex items-center justify-center gap-4 text-teal-600 text-[11px] font-bold uppercase tracking-[0.3em]">
-                <Navigation size={18} /> 进化路径
-              </div>
-              <div className="space-y-8">
+            <div className="w-full max-w-3xl py-10 space-y-12">
+              <h3 className="text-center text-xs font-bold text-teal-600 tracking-[0.3em] uppercase">进化路径 / Paths</h3>
+              <div className="space-y-6">
                 {result.suggestedPaths.map((p, i) => (
-                  <div key={i} className="flex items-center gap-10 p-10 bg-white rounded-[3rem] border-2 border-slate-50 group hover:border-teal-100 transition-all shadow-sm">
-                    <div className="w-16 h-16 bg-teal-50 rounded-2xl flex-shrink-0 flex items-center justify-center text-teal-600 font-serif text-3xl font-bold transition-all group-hover:bg-teal-600 group-hover:text-white">
-                      {i+1}
-                    </div>
-                    <p className="text-2xl text-slate-800 font-heiti leading-relaxed">{parseBilingual(p)}</p>
+                  <div key={i} className="p-10 bg-teal-50/30 rounded-[2.5rem] flex items-center gap-8 border border-teal-50">
+                    <div className="w-12 h-12 bg-teal-600 text-white rounded-2xl flex items-center justify-center font-bold text-xl">{i+1}</div>
+                    <p className="text-xl text-slate-800 font-heiti">{parseBilingual(p)}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="w-full max-w-2xl">
-              <div className="p-16 md:p-24 bg-slate-900 rounded-[5rem] text-white text-center space-y-10 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-indigo-500/10 to-transparent pointer-events-none"></div>
-                <Quote className="mx-auto text-indigo-400/20" size={60} />
-                <div className="space-y-4">
-                  <p className="text-[10px] tracking-[0.5em] opacity-40 uppercase font-bold">Life Creed</p>
-                  <h3 className="text-4xl md:text-5xl font-serif italic font-bold leading-relaxed text-indigo-100">
-                    "{parseBilingual(result.motto)}"
-                  </h3>
-                </div>
-              </div>
-            </div>
-            
-            <div className="pt-20 border-t border-slate-100 text-center flex flex-col items-center gap-6 w-full max-w-xl">
-               <div className="flex items-center gap-3 text-slate-400 font-serif italic text-2xl">
-                 <Compass size={28} className="text-indigo-600" /> Explorer's Compass
+            <div className="w-full max-w-2xl py-20 text-center">
+               <div className="p-16 bg-slate-900 rounded-[4rem] text-white space-y-6 relative overflow-hidden">
+                  <Quote className="absolute top-8 left-8 text-white/10" size={100} />
+                  <p className="text-xs opacity-40 tracking-[0.4em] font-bold">SOUL MOTTO</p>
+                  <h3 className="text-3xl md:text-4xl font-serif italic leading-relaxed">"{parseBilingual(result.motto)}"</h3>
                </div>
-               <p className="text-slate-300 text-[10px] uppercase tracking-[0.5em] font-bold">
-                 Generated by AI Soul Navigator • {new Date().toLocaleDateString()}
-               </p>
             </div>
+
+            <div className="pt-20 border-t border-slate-100 text-slate-300 text-[10px] tracking-[0.5em] font-bold">EXPLORER'S COMPASS • {new Date().toLocaleDateString()}</div>
           </div>
         </div>
-
-        <div style={{ display: 'none' }}>
-           <div ref={chatContainerRef} className="bg-white p-24 w-[1000px] flex flex-col gap-12 export-container">
-             <div className="text-center border-b pb-12 mb-12">
-               <h1 className="text-5xl font-serif font-bold text-slate-900 mb-4">{t.title}</h1>
-               <div className="text-indigo-600 font-bold uppercase tracking-[0.3em]">{mode} FULL DIALOGUE</div>
-             </div>
-             {messages.map((m) => <ChatBubble key={m.id} message={m} language={lang} />)}
-           </div>
-        </div>
+        
+        <div style={{display:'none'}}><div ref={chatContainerRef} className="bg-white p-20 w-[800px] flex flex-col gap-8 export-container">
+          <h1 className="text-4xl font-serif font-bold text-center mb-10">{t.title} - Chat History</h1>
+          {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} />)}
+        </div></div>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-screen bg-white">
-      <header className="px-8 py-8 flex items-center justify-between border-b bg-white/80 backdrop-blur-xl sticky top-0 z-40">
-        <div className="flex items-center gap-5">
-          <button onClick={() => { if(confirm(t.backBtn)) reset() }} className="p-4 bg-slate-900 rounded-3xl text-white shadow-xl hover:scale-105 transition-transform">
-            <Compass size={28} />
-          </button>
-          <div>
-            <h1 className="font-serif font-bold text-slate-900 text-2xl">{t.title}</h1>
-            <div className="flex items-center gap-2">
-              <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${intensity === 'DEEP' ? 'bg-blue-500' : 'bg-indigo-500'}`}></div>
-              <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">{mode?.replace('_', ' ')} • {intensity}</p>
-            </div>
-          </div>
+      <header className="px-8 py-6 flex items-center justify-between border-b sticky top-0 bg-white/80 backdrop-blur z-40">
+        <div className="flex items-center gap-4">
+          <button onClick={() => {if(window.confirm(t.backBtn)) reset()}} className="p-3 bg-slate-900 text-white rounded-2xl"><Compass size={24}/></button>
+          <div><h1 className="font-serif font-bold text-xl">{t.title}</h1><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{mode} • {intensity}</p></div>
         </div>
-        <div className="flex items-center gap-8">
-          <div className="hidden md:block w-48">
-            <ProgressBar current={questionCount} total={intensity === 'QUICK' ? QUICK_TARGET : DEEP_TARGET} />
-          </div>
-          <button onClick={() => setLang(l => l === 'zh' ? 'en' : 'zh')} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
-            <Languages size={24} />
-          </button>
+        <div className="flex items-center gap-6">
+          <div className="hidden md:block w-32"><ProgressBar current={questionCount} total={intensity==='QUICK'?QUICK_TARGET:DEEP_TARGET}/></div>
+          <button onClick={() => setLang(l => l==='zh'?'en':'zh')} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><Languages size={24}/></button>
         </div>
       </header>
 
-      <main ref={scrollRef} className="flex-1 overflow-y-auto pt-16 pb-32 px-4 md:px-0">
-        <div className="max-w-4xl mx-auto flex flex-col">
-          {messages.map((m) => <ChatBubble key={m.id} message={m} language={lang} />)}
-          
-          {error && (
-            <div className="p-8 mx-auto max-w-2xl bg-red-50 border border-red-100 rounded-[2rem] text-center space-y-6 animate-in fade-in slide-in-from-top-4">
-              <div className="flex items-center justify-center gap-3 text-red-500">
-                <AlertCircle size={32} />
-                <h3 className="text-xl font-bold font-heiti">{lang === 'zh' ? '由于流量过大，连接暂时中断' : 'Connection interrupted due to heavy traffic'}</h3>
-              </div>
-              <p className="text-slate-600 leading-relaxed font-heiti">{error}</p>
-              <button 
-                onClick={handleRetry} 
-                className="px-8 py-4 bg-red-500 text-white rounded-2xl font-bold flex items-center gap-3 mx-auto hover:bg-red-600 transition-all shadow-lg shadow-red-100"
-              >
-                <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
-                {t.retryBtn}
-              </button>
-            </div>
-          )}
-
-          {isLoading && (
-            <div className="flex gap-3 p-10 items-center justify-center opacity-40">
-              <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-              <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-              <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
-            </div>
-          )}
+      <main ref={scrollRef} className="flex-1 overflow-y-auto pt-10 pb-32">
+        <div className="max-w-4xl mx-auto px-4">
+          {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} />)}
+          {error && <div className="p-8 bg-red-50 rounded-3xl text-center space-y-4 max-w-xl mx-auto">
+            <div className="flex items-center justify-center gap-2 text-red-500 font-bold"><AlertCircle size={20}/>{t.errorQuota}</div>
+            <button onClick={handleSend} className="px-6 py-2 bg-red-500 text-white rounded-xl font-bold flex items-center gap-2 mx-auto"><RefreshCw size={16}/>{t.retryBtn}</button>
+          </div>}
+          {isLoading && <div className="flex justify-center p-8 opacity-20"><Dna className="animate-spin" size={32}/></div>}
         </div>
       </main>
 
-      <footer className="p-8 md:p-12 bg-white border-t sticky bottom-0 z-30">
-        <div className="max-w-4xl mx-auto space-y-8">
-          <div className="relative group">
-            <div className="absolute -inset-2 bg-gradient-to-r from-indigo-500 to-blue-500 rounded-[2.5rem] blur opacity-10 group-focus-within:opacity-30 transition duration-1000"></div>
-            <div className="relative flex gap-4">
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder={t.inputPlaceholder}
-                rows={2}
-                disabled={!!error || isLoading}
-                className="flex-1 pl-10 pr-20 py-6 bg-slate-50 rounded-[2rem] border-2 border-transparent focus:border-indigo-500/20 focus:outline-none focus:bg-white text-2xl font-heiti transition-all resize-none shadow-inner disabled:opacity-50"
-              />
-              <button 
-                onClick={handleSend} 
-                disabled={!input.trim() || isLoading || !!error} 
-                className="absolute right-4 bottom-4 p-5 bg-slate-900 text-white rounded-2xl hover:bg-black disabled:bg-slate-100 disabled:text-slate-300 shadow-2xl transition-all active:scale-90"
-              >
-                <Send size={28} />
-              </button>
-            </div>
+      <footer className="p-6 border-t bg-white sticky bottom-0">
+        <div className="max-w-4xl mx-auto space-y-4">
+          <div className="relative flex gap-4">
+            <textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter' && !e.shiftKey){e.preventDefault();handleSend();}}} placeholder={t.inputPlaceholder} rows={2} disabled={!!error || isLoading} className="flex-1 p-6 bg-slate-50 rounded-[1.5rem] border-2 border-transparent focus:border-indigo-100 focus:bg-white outline-none text-xl resize-none transition-all disabled:opacity-50" />
+            <button onClick={handleSend} disabled={!input.trim() || isLoading || !!error} className="absolute right-3 bottom-3 p-4 bg-slate-900 text-white rounded-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-20"><Send size={24}/></button>
           </div>
-          {canFinishEarly && !error && (
-            <button onClick={analyze} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-bold flex items-center justify-center gap-4 hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <Sparkles size={24} /> 
-              <span className="font-heiti tracking-[0.2em] text-xl">{t.finishBtn}</span>
-            </button>
-          )}
+          {canFinishEarly && !error && <button onClick={analyze} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-bold flex items-center justify-center gap-3 shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all"><Sparkles size={20}/>{t.finishBtn}</button>}
         </div>
       </footer>
     </div>

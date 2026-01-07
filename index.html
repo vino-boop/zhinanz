@@ -11,44 +11,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --primary-font: 'Inter', 'Noto Sans SC', "Heiti SC", "Microsoft YaHei", sans-serif;
-    }
-    body {
-      font-family: var(--primary-font);
-      background: #fafafa;
-      color: #111;
-      margin: 0;
-    }
-    .font-serif {
-      font-family: 'Playfair Display', serif;
-    }
-    .font-heiti {
-      font-family: var(--primary-font);
-      font-weight: 500;
-    }
-    strong, b {
-      font-weight: 700;
-      color: #1d4ed8;
-      background: linear-gradient(to bottom, transparent 65%, #dbeafe 65%);
-      padding: 0 2px;
-    }
-    .glass {
-      background: rgba(255, 255, 255, 0.7);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.4);
-    }
-    .animate-spin-slow {
-      animation: spin 12s linear infinite;
-    }
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    .export-container {
-      background: white;
-    }
+    :root { --primary-font: 'Inter', 'Noto Sans SC', sans-serif; }
+    body { font-family: var(--primary-font); background: #fafafa; color: #111; margin: 0; }
+    .font-serif { font-family: 'Playfair Display', serif; }
+    .font-heiti { font-family: var(--primary-font); font-weight: 500; }
+    strong, b { font-weight: 700; color: #1d4ed8; background: linear-gradient(to bottom, transparent 65%, #dbeafe 65%); padding: 0 2px; }
+    .export-container { background: white; }
   </style>
 <script type="importmap">
 {
@@ -58,15 +26,14 @@
     "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
     "@google/genai": "https://esm.sh/@google/genai@1.34.0",
     "lucide-react": "https://esm.sh/lucide-react@0.460.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
 </head>
 <body>
   <div id="root"></div>
-  <!-- 关键修复：添加入口文件引用 -->
   <script type="module" src="./index.tsx"></script>
 </body>
 </html>
