@@ -139,7 +139,6 @@ const App: React.FC = () => {
   const startJourney = async (m: DiscoveryMode, i: DiscoveryIntensity) => {
     setIsLoading(true); setError(null);
     try {
-      // 发送一个特殊的 START 信号给 Service，让其从预设库抓取
       const firstQ = await getNextQuestion([{ id: 'start-signal', role: 'user', content: 'START', timestamp: Date.now() }], m, i, settings);
       setMessages([{ id: Date.now().toString(), role: 'assistant', content: firstQ, timestamp: Date.now() }]);
       setQuestionCount(1);
@@ -199,6 +198,14 @@ const App: React.FC = () => {
     return (lang === 'zh' ? parts[0] : (parts[1] || parts[0])).trim();
   };
 
+  const getModeLabel = (m: DiscoveryMode | null) => {
+    if (!m) return "";
+    if (m === 'LIFE_MEANING') return t.modeLife;
+    if (m === 'JUSTICE') return t.modeJustice;
+    if (m === 'SELF_IDENTITY') return t.modeSelf;
+    return m;
+  };
+
   if (state === 'landing') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
@@ -245,9 +252,6 @@ const App: React.FC = () => {
 
         <div className="max-w-5xl text-center space-y-16 z-10">
           <div className="space-y-6">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-[0.3em] mb-4">
-              <Bot size={14} /> Powered by {settings.provider.toUpperCase()}
-            </div>
             <h1 className="text-7xl font-serif font-bold text-slate-900 tracking-tight">{t.title}</h1>
             <p className="text-xl md:text-2xl text-slate-500 font-heiti max-w-2xl mx-auto leading-relaxed">{t.landingDesc}</p>
           </div>
@@ -310,7 +314,6 @@ const App: React.FC = () => {
 
   if (state === 'result' && result) {
     const summaryText = parseBilingual(result.summary);
-    // 第一句话加粗放大
     const summaryParagraphs = summaryText.split('\n').filter(p => p.trim());
     const heroSentence = summaryParagraphs[0];
     const deepAnalysis = summaryParagraphs.slice(1);
@@ -363,7 +366,6 @@ const App: React.FC = () => {
               </div>
               <div className="space-y-12">
                 {result.dimensions?.map((dim, i) => {
-                  // 修复百分比显示逻辑：如果 AI 返回的是小数(0-1)，转为百分比；如果是整数(1-100)，直接使用。
                   const rawVal = dim.value;
                   const displayValue = (rawVal > 0 && rawVal <= 1) ? Math.round(rawVal * 100) : Math.round(rawVal);
                   return (
@@ -429,7 +431,10 @@ const App: React.FC = () => {
       <header className="px-8 py-6 flex items-center justify-between border-b sticky top-0 bg-white/80 backdrop-blur-xl z-40">
         <div className="flex items-center gap-5">
           <button onClick={() => {if(window.confirm(t.backBtn)) reset()}} className="p-4 bg-slate-900 text-white rounded-[1.25rem] shadow-xl hover:scale-105 transition-transform"><Compass size={24}/></button>
-          <div><h1 className="font-serif font-bold text-2xl text-slate-900">{t.title}</h1><p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest">{mode} • {settings.provider.toUpperCase()}</p></div>
+          <div>
+            <h1 className="font-serif font-bold text-2xl text-slate-900">{t.title}</h1>
+            <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest">{getModeLabel(mode)}</p>
+          </div>
         </div>
         <div className="flex items-center gap-8">
           <div className="hidden md:block w-48"><ProgressBar current={questionCount} total={intensity==='QUICK'?QUICK_TARGET:DEEP_TARGET}/></div>
