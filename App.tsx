@@ -5,8 +5,8 @@ import { getNextQuestion, generateFinalAnalysis } from './services/aiService';
 import { ChatBubble } from './components/ChatBubble';
 import { ProgressBar } from './components/ProgressBar';
 import { 
-  Compass, Send, RefreshCw, Sparkles, ArrowRight, Quote, Languages, Scale, Heart, 
-  ScrollText, FileImage, Layers, Zap, Dna, Target, Navigation, Timer, Infinity as InfinityIcon, AlertCircle, Settings, X, Key, User,
+  Compass, Send, RefreshCw, Sparkles, ArrowRight, Quote, Languages, Scale, 
+  ScrollText, FileImage, Layers, Zap, Dna, Target, Timer, Infinity as InfinityIcon, AlertCircle, Settings, X, Key,
   BrainCircuit, Fingerprint, Bot
 } from 'lucide-react';
 
@@ -139,7 +139,8 @@ const App: React.FC = () => {
   const startJourney = async (m: DiscoveryMode, i: DiscoveryIntensity) => {
     setIsLoading(true); setError(null);
     try {
-      const firstQ = await getNextQuestion([{ id: 's', role: 'user', content: 'START', timestamp: Date.now() }], m, i, settings);
+      // 发送一个特殊的 START 信号给 Service，让其从预设库抓取
+      const firstQ = await getNextQuestion([{ id: 'start-signal', role: 'user', content: 'START', timestamp: Date.now() }], m, i, settings);
       setMessages([{ id: Date.now().toString(), role: 'assistant', content: firstQ, timestamp: Date.now() }]);
       setQuestionCount(1);
     } catch (e: any) { setError(e.message || t.errorQuota); }
@@ -149,10 +150,11 @@ const App: React.FC = () => {
   const handleSend = async () => {
     if (!input.trim() || isLoading || !mode) return;
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input, timestamp: Date.now() };
+    const historyWithSignal = [{ id: 's', role: 'user', content: 'START', timestamp: 0 }, ...messages, userMsg];
     setMessages(prev => [...prev, userMsg]);
     setInput(''); setIsLoading(true); setError(null);
     try {
-      const nextQRaw = await getNextQuestion([...messages, userMsg], mode, intensity, settings);
+      const nextQRaw = await getNextQuestion(historyWithSignal as Message[], mode, intensity, settings);
       const isDone = nextQRaw.includes('[DONE]');
       const reachedTarget = intensity === 'QUICK' ? questionCount >= QUICK_TARGET : questionCount >= DEEP_TARGET;
       if (isDone || reachedTarget) setCanFinishEarly(true);
@@ -171,7 +173,7 @@ const App: React.FC = () => {
     if (!mode) return;
     setState('analyzing'); setIsLoading(true);
     try {
-      const res = await generateFinalAnalysis(messages, mode, settings);
+      const res = await generateFinalAnalysis([{ id: 's', role: 'user', content: 'START', timestamp: 0 }, ...messages], mode, settings);
       setResult(res); setState('result');
     } catch (e: any) { 
       console.error(e);
@@ -308,7 +310,10 @@ const App: React.FC = () => {
 
   if (state === 'result' && result) {
     const summaryText = parseBilingual(result.summary);
+    // 第一句话加粗放大
     const summaryParagraphs = summaryText.split('\n').filter(p => p.trim());
+    const heroSentence = summaryParagraphs[0];
+    const deepAnalysis = summaryParagraphs.slice(1);
 
     return (
       <div className="min-h-screen bg-slate-50/50 py-12 px-4">
@@ -337,12 +342,17 @@ const App: React.FC = () => {
 
             <div className="w-full max-w-3xl py-10 space-y-12 relative z-10">
               <div className="text-indigo-400 font-black tracking-[0.4em] text-[10px] uppercase text-center">核心剖析 / Essence</div>
-              <div className="space-y-8 px-10 border-l-4 border-indigo-500/10">
-                {summaryParagraphs.map((para, i) => (
-                  <p key={i} className={`${i === 0 ? 'text-3xl md:text-5xl font-bold text-slate-900' : 'text-xl md:text-2xl text-slate-600'} leading-[1.8] font-serif italic`}>
-                    {para}
-                  </p>
-                ))}
+              <div className="space-y-12 px-10 border-l-4 border-indigo-500/10">
+                <p className="text-4xl md:text-5xl font-bold text-slate-900 leading-tight font-serif italic">
+                  {heroSentence}
+                </p>
+                <div className="space-y-8">
+                  {deepAnalysis.map((para, i) => (
+                    <p key={i} className="text-xl md:text-2xl text-slate-600 leading-[1.8] font-heiti opacity-90">
+                      {para}
+                    </p>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -353,8 +363,9 @@ const App: React.FC = () => {
               </div>
               <div className="space-y-12">
                 {result.dimensions?.map((dim, i) => {
-                  // Ensure value is correctly interpreted (handling 0.x vs x cases)
-                  const displayValue = dim.value <= 1 ? Math.round(dim.value * 100) : Math.round(dim.value);
+                  // 修复百分比显示逻辑：如果 AI 返回的是小数(0-1)，转为百分比；如果是整数(1-100)，直接使用。
+                  const rawVal = dim.value;
+                  const displayValue = (rawVal > 0 && rawVal <= 1) ? Math.round(rawVal * 100) : Math.round(rawVal);
                   return (
                     <div key={i} className="space-y-4">
                       <div className="flex justify-between font-heiti font-bold text-lg">
