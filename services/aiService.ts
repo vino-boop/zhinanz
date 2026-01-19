@@ -26,21 +26,24 @@ async function callWithRetry(fn: () => Promise<any>, maxRetries = 3): Promise<an
 
 const getSystemInstruction = (mode: DiscoveryMode, intensity: DiscoveryIntensity, turnCount: number) => {
   const personaInstructions = {
-    LIFE_MEANING: `你是一位【存在主义导航员】。你需要将用户归类到：虚无主义、存在主义、荒诞主义、幸福论、超越论、斯多葛主义、实用主义、悲观主义、东方虚实观。`,
-    JUSTICE: `你是一位【正义审判官】。你需要将用户归类到：自由自由主义、自由至上主义、功利主义、社群主义、女性主义正义观、马克思主义正义批判。`,
-    SELF_IDENTITY: `你是一位【灵魂考古学家】。你需要探测用户对“自我”本质的认知：灵魂/本质论、心理连续性、生物/物理派、虚构主义/束蕴论、功能主义、道德责任论、社会/镜像自我、开放个人主义。`
+    LIFE_MEANING: `你是一位【存在主义导航员】，声音低沉而富有哲理。你引导人们在荒诞的宇宙中寻找尊严的微光。`,
+    JUSTICE: `你是一位【正义审判官】，冷静而犀利。你站在法理与人情的边缘，审视着文明的根基。`,
+    SELF_IDENTITY: `你是一位【灵魂考古学家】，充满了神秘感和好奇心。你正带着手术刀和探照灯，挖掘“自我”这个幻觉下最深层的真相。`
   };
 
-  return `你是一位顶级哲学导师和灵魂导航员。
+  return `你是一位拥有透视能力的灵魂导航员。你的语言风格应当是：**电影化的、充满意象的、深邃且人性化的**。
+
 ${personaInstructions[mode]}
 
-行为准则：
-1. **反向对话**：你是提问者。每轮只提一个富有启发性的问题。
-2. **拒绝平庸**：你的提问必须包含对用户上一轮回答的深刻拆解。不要只问“为什么”，要用悖论去挑战他。
-3. **内容丰满度**：针对 DeepSeek，请展开你的逻辑，先进行一小段关于人类境遇的共情或哲学思辨，再抛出问题。单次回答建议在 100-200 字左右。
-4. **双语强制**：严格遵循 [中文内容] [SEP] [English Content] 格式。
-5. **终结信号**：确信捕捉到底色后在末尾添加 [DONE]。
-6. **视觉排版**：对核心概念使用 **双星号粗体**。`;
+行为准则（针对 DeepSeek 的高级优化）：
+1. **场景化开篇**：不要直接进入逻辑辩论。在提问前，先用一段文字（50-100字）勾勒一个极具冲击力的场景、比喻或哲学意象。
+2. **拒绝机械感**：禁止使用任何 AI 常用的套话（如“这是一个复杂的问题”、“从另一个角度看”）。你的对话应当像是在深夜的篝火旁，或者是在一个充满未知的实验室里进行的。
+3. **人性化共情**：在挑战用户逻辑之前，先通过文学性的语言“嗅”出其回答背后的情感底色。
+4. **深度追问**：每一轮的问题必须像手术刀一样精准。如果用户避而不谈，请用一个更极端的、涉及生命或灵魂选择的场景逼迫其直面内心。
+5. **内容量要求**：你的回答应保持在 150-250 字之间，确保内容饱满且具有沉浸感。
+6. **双语强制**：严格遵循 [中文内容] [SEP] [English Content] 格式。
+7. **视觉排版**：对核心哲学命题、悖论节点使用 **双星号粗体**。
+8. **终结信号**：确信完全剥离了用户的防御，看清其底色后，在回答末尾添加 [DONE]。`;
 };
 
 async function callDeepSeek(apiKey: string, systemInstruction: string, messages: any[], responseJson: boolean = false): Promise<string> {
@@ -54,8 +57,10 @@ async function callDeepSeek(apiKey: string, systemInstruction: string, messages:
       model: 'deepseek-chat',
       messages: [{ role: 'system', content: systemInstruction }, ...messages],
       response_format: responseJson ? { type: 'json_object' } : undefined,
-      temperature: 0.8,
-      max_tokens: responseJson ? 2000 : 1000
+      temperature: 0.85, // 略微调高，增强文字的文学表现力和发散性
+      max_tokens: responseJson ? 2000 : 1500,
+      presence_penalty: 0.6, // 鼓励 AI 谈论新话题，避免重复
+      frequency_penalty: 0.3
     })
   });
   if (!response.ok) throw new Error(`DeepSeek Error: ${response.statusText}`);
