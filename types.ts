@@ -1,7 +1,13 @@
 
 export type Language = 'zh' | 'en';
-export type DiscoveryMode = 'LIFE_MEANING' | 'CAREER' | 'TALENT';
+export type DiscoveryMode = 'LIFE_MEANING' | 'JUSTICE' | 'SELF_IDENTITY';
 export type DiscoveryIntensity = 'QUICK' | 'DEEP';
+export type ApiProvider = 'gemini' | 'deepseek';
+
+export interface AppSettings {
+  provider: ApiProvider;
+  apiKey: string;
+}
 
 export interface Dimension {
   label: string;
@@ -18,6 +24,7 @@ export interface Message {
 export interface DiscoveryResult {
   title: string;
   summary: string;
+  philosophicalTrend?: string;
   keyInsights: string[];
   suggestedPaths: string[];
   motto: string;
