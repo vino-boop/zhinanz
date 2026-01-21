@@ -54,7 +54,7 @@ const i18n = {
     analyzingDesc: "AI 正在分析您的思考底色，编织最终报告。",
     resultTitle: "探索终局报告",
     trendLabel: "哲学底色",
-    inputPlaceholder: "输入你最真实的想法...",
+    inputPlaceholder: "输入你的任何想法，任何...",
     langToggle: "Switch to English",
     finishBtn: "生成探索报告",
     backBtn: "返回",
