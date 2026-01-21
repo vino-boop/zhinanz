@@ -7,7 +7,8 @@ import { ProgressBar } from './components/ProgressBar';
 import { 
   Compass, Send, RefreshCw, Sparkles, ArrowRight, Quote, Languages, Scale, 
   ScrollText, FileImage, Layers, Zap, Dna, Target, Timer, Infinity as InfinityIcon, AlertCircle, Settings, X, Key,
-  BrainCircuit, Fingerprint, Bot
+  BrainCircuit, Fingerprint, Cpu, Network, MessageSquare, FlaskConical, Binary, Eye,
+  Dices, LayoutGrid, RotateCcw
 } from 'lucide-react';
 
 declare const html2canvas: any;
@@ -19,7 +20,13 @@ const i18n = {
   zh: {
     title: "探索者指南针",
     subtitle: "从心出发，发现天命",
-    landingDesc: "这不是一次普通的测试。AI 将通过追问，剥离你作为“社会人”的伪装，帮你找回生命原点。",
+    landingDesc: "这不是一次普通的测试。拉动命运的拉杆，抽取一个当下最需要面对的哲学命题。",
+    drawBtn: "抽取命运卡牌",
+    drawing: "命运流转中...",
+    startJourney: "开启此旅程",
+    redraw: "重新抽取",
+    viewAll: "查看全部命题",
+    allModesTitle: "全息哲学图谱",
     beginBtn: "开启旅程",
     intensityTitle: "选择对话强度",
     intensityDesc: "深度的旅程需要更多勇气去直面阴影。",
@@ -29,6 +36,16 @@ const i18n = {
     modeJusticeDesc: "分配正义与社会契约",
     modeSelf: "我是谁？",
     modeSelfDesc: "考古你的自我本质",
+    modeFreeWill: "自由意志",
+    modeFreeWillDesc: "你是否只是生物机器？",
+    modeSimulation: "模拟假说",
+    modeSimulationDesc: "红蓝药丸的抉择",
+    modeOtherMinds: "他者意识",
+    modeOtherMindsDesc: "唯我论与哲学僵尸",
+    modeLanguage: "语言边界",
+    modeLanguageDesc: "我们能理解彼此吗？",
+    modeScience: "科学真理",
+    modeScienceDesc: "发现真理还是发明模型？",
     intensityQuick: "直觉相遇 (Quick)",
     intensityQuickDesc: "8轮左右的高频互动。",
     intensityDeep: "深度追问 (Deep)",
@@ -55,7 +72,13 @@ const i18n = {
   en: {
     title: "Explorer's Compass",
     subtitle: "Navigate Your Soul",
-    landingDesc: "Not just a test. AI will strip away your social masks through probing questions.",
+    landingDesc: "Not just a test. Pull the lever of fate to draw the philosophical question you most need to face right now.",
+    drawBtn: "Draw Fate Card",
+    drawing: "Spinning the Wheel of Fate...",
+    startJourney: "Embark",
+    redraw: "Draw Again",
+    viewAll: "View All Themes",
+    allModesTitle: "Holographic Map",
     beginBtn: "Start Journey",
     intensityTitle: "Dialogue Intensity",
     intensityDesc: "Deep journeys require courage to face the truth.",
@@ -65,6 +88,16 @@ const i18n = {
     modeJusticeDesc: "Contracts & Fairness",
     modeSelf: "Who Am I?",
     modeSelfDesc: "Archaeology of Identity",
+    modeFreeWill: "Free Will",
+    modeFreeWillDesc: "Are you a bio-machine?",
+    modeSimulation: "Simulation",
+    modeSimulationDesc: "Red or Blue Pill?",
+    modeOtherMinds: "Other Minds",
+    modeOtherMindsDesc: "Solipsism & Zombies",
+    modeLanguage: "Language",
+    modeLanguageDesc: "Can we truly understand?",
+    modeScience: "Science & Truth",
+    modeScienceDesc: "Discovery or Invention?",
     intensityQuick: "Intuitive (Quick)",
     intensityQuickDesc: "~8 rounds of interaction.",
     intensityDeep: "Probing (Deep)",
@@ -90,6 +123,21 @@ const i18n = {
   }
 };
 
+const MODE_DEFINITIONS = [
+  {id:'LIFE_MEANING', icon:ScrollText, color:'text-indigo-600', bg:'bg-indigo-50'},
+  {id:'JUSTICE', icon:Scale, color:'text-blue-600', bg:'bg-blue-50'},
+  {id:'SELF_IDENTITY', icon:Fingerprint, color:'text-teal-600', bg:'bg-teal-50'},
+  {id:'FREE_WILL', icon:Cpu, color:'text-amber-600', bg:'bg-amber-50'},
+  {id:'SIMULATION', icon:Binary, color:'text-red-600', bg:'bg-red-50'},
+  {id:'OTHER_MINDS', icon:Eye, color:'text-purple-600', bg:'bg-purple-50'},
+  {id:'LANGUAGE', icon:MessageSquare, color:'text-pink-600', bg:'bg-pink-50'},
+  {id:'SCIENCE', icon:FlaskConical, color:'text-cyan-600', bg:'bg-cyan-50'},
+];
+
+// Replicate list for infinite scroll illusion
+const SLOT_ITEMS = [...MODE_DEFINITIONS, ...MODE_DEFINITIONS, ...MODE_DEFINITIONS, ...MODE_DEFINITIONS, ...MODE_DEFINITIONS, ...MODE_DEFINITIONS];
+const ITEM_HEIGHT = 160; // px
+
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>('landing');
   const [mode, setMode] = useState<DiscoveryMode | null>(null);
@@ -102,7 +150,14 @@ const App: React.FC = () => {
   const [result, setResult] = useState<DiscoveryResult | null>(null);
   const [questionCount, setQuestionCount] = useState(0);
   const [canFinishEarly, setCanFinishEarly] = useState(false);
+  
+  // Settings & Lottery State
   const [showSettings, setShowSettings] = useState(false);
+  const [showAllModes, setShowAllModes] = useState(false);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [drawnMode, setDrawnMode] = useState<DiscoveryMode | null>(null);
+  const slotRef = useRef<HTMLDivElement>(null);
+  
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('explorer_compass_settings');
     return saved ? JSON.parse(saved) : { provider: 'gemini', apiKey: '' };
@@ -128,12 +183,49 @@ const App: React.FC = () => {
     setMessages([]); setInput(''); setIsLoading(false);
     setError(null); setResult(null); setQuestionCount(0);
     setCanFinishEarly(false);
+    setDrawnMode(null);
+    setIsSpinning(false);
   };
 
-  const selectMode = (m: DiscoveryMode) => { setMode(m); setState('intensity_select'); };
+  const selectMode = (m: DiscoveryMode) => { setMode(m); setState('intensity_select'); setShowAllModes(false); };
   const selectIntensity = (i: DiscoveryIntensity) => { 
     setIntensity(i); setState('chatting'); 
     if (mode) startJourney(mode, i); 
+  };
+
+  const startSpin = () => {
+    if (isSpinning) return;
+    setIsSpinning(true);
+    setDrawnMode(null);
+
+    // Randomize result (pick from the last 2 sets to allow long scroll)
+    const baseIndex = SLOT_ITEMS.length - (MODE_DEFINITIONS.length * 2);
+    const randomOffset = Math.floor(Math.random() * MODE_DEFINITIONS.length);
+    const finalIndex = baseIndex + randomOffset;
+    const finalMode = SLOT_ITEMS[finalIndex];
+
+    if (slotRef.current) {
+      // Reset position instantly
+      slotRef.current.style.transition = 'none';
+      slotRef.current.style.transform = 'translateY(0px)';
+      
+      // Force reflow
+      void slotRef.current.offsetHeight;
+
+      // Start spinning
+      setTimeout(() => {
+        if (slotRef.current) {
+            slotRef.current.style.transition = 'transform 3s cubic-bezier(0.1, 0.9, 0.2, 1)'; // Ease out
+            slotRef.current.style.transform = `translateY(-${finalIndex * ITEM_HEIGHT}px)`;
+        }
+      }, 50);
+
+      // Finish spin
+      setTimeout(() => {
+        setIsSpinning(false);
+        setDrawnMode(finalMode.id as DiscoveryMode);
+      }, 3000);
+    }
   };
 
   const startJourney = async (m: DiscoveryMode, i: DiscoveryIntensity) => {
@@ -200,17 +292,39 @@ const App: React.FC = () => {
 
   const getModeLabel = (m: DiscoveryMode | null) => {
     if (!m) return "";
-    if (m === 'LIFE_MEANING') return t.modeLife;
-    if (m === 'JUSTICE') return t.modeJustice;
-    if (m === 'SELF_IDENTITY') return t.modeSelf;
-    return m;
+    const labels: Record<DiscoveryMode, string> = {
+      LIFE_MEANING: t.modeLife,
+      JUSTICE: t.modeJustice,
+      SELF_IDENTITY: t.modeSelf,
+      FREE_WILL: t.modeFreeWill,
+      SIMULATION: t.modeSimulation,
+      OTHER_MINDS: t.modeOtherMinds,
+      LANGUAGE: t.modeLanguage,
+      SCIENCE: t.modeScience,
+    };
+    return labels[m] || m;
   };
+
+  const getModeDesc = (m: DiscoveryMode | null) => {
+    if (!m) return "";
+    const descs: Record<DiscoveryMode, string> = {
+      LIFE_MEANING: t.modeLifeDesc,
+      JUSTICE: t.modeJusticeDesc,
+      SELF_IDENTITY: t.modeSelfDesc,
+      FREE_WILL: t.modeFreeWillDesc,
+      SIMULATION: t.modeSimulationDesc,
+      OTHER_MINDS: t.modeOtherMindsDesc,
+      LANGUAGE: t.modeLanguageDesc,
+      SCIENCE: t.modeScienceDesc,
+    };
+    return descs[m] || "";
+  }
 
   if (state === 'landing') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
         {/* Header Options */}
-        <div className="absolute top-8 right-8 flex gap-3">
+        <div className="absolute top-8 right-8 flex gap-3 z-50 items-center">
           <div className="bg-white px-1.5 py-1.5 rounded-full shadow-sm border border-slate-100 flex gap-1">
              {['gemini', 'deepseek'].map(p => (
                <button 
@@ -224,8 +338,40 @@ const App: React.FC = () => {
           </div>
           <button onClick={() => setShowSettings(true)} className="p-3 bg-white shadow-sm rounded-full text-indigo-600 border border-slate-100 hover:shadow-md transition-all"><Settings size={18} /></button>
           <button onClick={() => setLang(l => l === 'zh' ? 'en' : 'zh')} className="px-5 py-3 bg-white shadow-sm rounded-full text-xs font-bold text-indigo-600 border border-slate-100">{t.langToggle}</button>
+          
+          <button 
+            onClick={() => setShowAllModes(true)} 
+            className="flex items-center gap-2 px-5 py-3 bg-white shadow-sm rounded-full text-xs font-bold text-slate-600 border border-slate-100 hover:shadow-md transition-all hover:text-indigo-600"
+          >
+            <LayoutGrid size={16} />
+            {t.viewAll}
+          </button>
         </div>
 
+        {/* View All Overlay */}
+        {showAllModes && (
+          <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto">
+             <div className="max-w-6xl mx-auto p-8 space-y-8">
+               <div className="flex justify-between items-center">
+                 <h2 className="text-3xl font-serif font-bold text-slate-900">{t.allModesTitle}</h2>
+                 <button onClick={() => setShowAllModes(false)} className="p-3 bg-white shadow-sm rounded-full hover:bg-slate-100"><X size={24}/></button>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pb-20">
+                {MODE_DEFINITIONS.map(m => (
+                  <button key={m.id} onClick={() => selectMode(m.id as DiscoveryMode)} className="group p-6 bg-white rounded-[2rem] shadow-sm hover:shadow-xl transition-all text-left space-y-4 border border-transparent hover:border-slate-100 flex flex-col h-full">
+                    <div className={`w-14 h-14 ${m.bg} ${m.color} rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform`}><m.icon size={28}/></div>
+                    <div className="space-y-1">
+                      <h3 className="text-xl font-bold text-slate-800">{getModeLabel(m.id as DiscoveryMode)}</h3>
+                      <p className="text-slate-400 text-xs leading-relaxed">{getModeDesc(m.id as DiscoveryMode)}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+             </div>
+          </div>
+        )}
+
+        {/* Settings Overlay */}
         {showSettings && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
             <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 space-y-8 relative">
@@ -250,25 +396,68 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className="max-w-5xl text-center space-y-16 z-10">
-          <div className="space-y-6">
-            <h1 className="text-7xl font-serif font-bold text-slate-900 tracking-tight">{t.title}</h1>
-            <p className="text-xl md:text-2xl text-slate-500 font-heiti max-w-2xl mx-auto leading-relaxed">{t.landingDesc}</p>
+        {/* Main Content: The Gacha Machine */}
+        <div className="w-full max-w-xl text-center space-y-12 z-10 py-10 flex flex-col items-center">
+          <div className="space-y-4">
+            <h1 className="text-5xl md:text-6xl font-serif font-bold text-slate-900 tracking-tight">{t.title}</h1>
+            <p className="text-lg md:text-xl text-slate-500 font-heiti mx-auto leading-relaxed max-w-lg">{t.landingDesc}</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {id:'LIFE_MEANING', icon:ScrollText, label:t.modeLife, desc:t.modeLifeDesc, color:'bg-indigo-50 text-indigo-600'},
-              {id:'JUSTICE', icon:Scale, label:t.modeJustice, desc:t.modeJusticeDesc, color:'bg-blue-50 text-blue-600'},
-              {id:'SELF_IDENTITY', icon:Fingerprint, label:t.modeSelf, desc:t.modeSelfDesc, color:'bg-teal-50 text-teal-600'}
-            ].map(m => (
-              <button key={m.id} onClick={() => selectMode(m.id as DiscoveryMode)} className="group p-10 bg-white rounded-[3rem] shadow-sm hover:shadow-2xl transition-all text-center space-y-6 border border-transparent hover:border-indigo-50/50">
-                <div className={`w-20 h-20 ${m.color} rounded-3xl flex items-center justify-center mx-auto group-hover:scale-110 transition-transform`}><m.icon size={40}/></div>
-                <div className="space-y-2">
-                  <h3 className="text-3xl font-bold text-slate-800">{m.label}</h3>
-                  <p className="text-slate-400 text-sm leading-relaxed">{m.desc}</p>
-                </div>
-              </button>
-            ))}
+
+          <div className="relative p-2 bg-white rounded-[3.5rem] shadow-2xl border-4 border-slate-100 w-80">
+            {/* Slot Window */}
+            <div className="relative h-[240px] w-full overflow-hidden rounded-[3rem] bg-slate-50 shadow-inner perspective-[1000px]">
+               {/* Gradients for 3D effect */}
+               <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-slate-200/50 to-transparent z-10 pointer-events-none"></div>
+               <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-slate-200/50 to-transparent z-10 pointer-events-none"></div>
+               
+               {/* Center highlight line */}
+               <div className="absolute top-1/2 left-4 right-4 h-0.5 bg-indigo-500/20 -translate-y-1/2 z-0"></div>
+
+               <div ref={slotRef} className="w-full">
+                  {SLOT_ITEMS.map((m, i) => (
+                    <div key={i} className="flex flex-col items-center justify-center gap-2" style={{height: ITEM_HEIGHT}}>
+                       <div className={`w-16 h-16 ${m.bg} ${m.color} rounded-2xl flex items-center justify-center shadow-sm`}>
+                         <m.icon size={32}/>
+                       </div>
+                       <div className="text-center">
+                         <h3 className="text-lg font-bold text-slate-800">{getModeLabel(m.id as DiscoveryMode)}</h3>
+                         <p className="text-[10px] text-slate-400 uppercase tracking-widest">Question {i % 8 + 1}</p>
+                       </div>
+                    </div>
+                  ))}
+               </div>
+            </div>
+
+            {/* Controls */}
+            <div className="mt-6 mb-4 px-4">
+              {!drawnMode && !isSpinning && (
+                <button 
+                  onClick={startSpin}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-lg hover:bg-black transition-all flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <Dices size={20} />
+                  {t.drawBtn}
+                </button>
+              )}
+
+              {isSpinning && (
+                <button disabled className="w-full py-4 bg-slate-100 text-slate-400 rounded-2xl font-bold flex items-center justify-center gap-2 cursor-wait">
+                   <RefreshCw size={20} className="animate-spin" />
+                   {t.drawing}
+                </button>
+              )}
+
+              {drawnMode && !isSpinning && (
+                 <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <button onClick={() => selectMode(drawnMode)} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
+                       {t.startJourney} <ArrowRight size={18} />
+                    </button>
+                    <button onClick={startSpin} className="w-full py-3 text-slate-400 hover:text-slate-600 text-sm font-bold flex items-center justify-center gap-2">
+                       <RotateCcw size={14} /> {t.redraw}
+                    </button>
+                 </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

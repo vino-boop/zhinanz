@@ -1,6 +1,6 @@
 
 export type Language = 'zh' | 'en';
-export type DiscoveryMode = 'LIFE_MEANING' | 'JUSTICE' | 'SELF_IDENTITY';
+export type DiscoveryMode = 'LIFE_MEANING' | 'JUSTICE' | 'SELF_IDENTITY' | 'FREE_WILL' | 'SIMULATION' | 'OTHER_MINDS' | 'LANGUAGE' | 'SCIENCE';
 export type DiscoveryIntensity = 'QUICK' | 'DEEP';
 export type ApiProvider = 'gemini' | 'deepseek';
 
