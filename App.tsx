@@ -231,28 +231,49 @@ const App: React.FC = () => {
   const startJourney = async (m: DiscoveryMode, i: DiscoveryIntensity) => {
     setIsLoading(true); setError(null);
     try {
-      const firstQ = await getNextQuestion([{ id: 'start-signal', role: 'user', content: 'START', timestamp: Date.now() }], m, i, settings);
-      setMessages([{ id: Date.now().toString(), role: 'assistant', content: firstQ, timestamp: Date.now() }]);
+      const result = await getNextQuestion([{ id: 'start-signal', role: 'user', content: 'START', timestamp: Date.now() }], m, i, settings);
+      setMessages([{ 
+        id: Date.now().toString(), 
+        role: 'assistant', 
+        content: result.content, 
+        suggestions: result.suggestions,
+        timestamp: Date.now() 
+      }]);
       setQuestionCount(1);
     } catch (e: any) { setError(e.message || t.errorQuota); }
     finally { setIsLoading(false); }
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading || !mode) return;
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input, timestamp: Date.now() };
+  const handleSend = async (overrideInput?: string) => {
+    const textToSend = overrideInput || input;
+    if (!textToSend.trim() || isLoading || !mode) return;
+
+    // Clear suggestions from the last message to hide chips
+    setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last && last.role === 'assistant') {
+            return [...prev.slice(0, -1), { ...last, suggestions: undefined }];
+        }
+        return prev;
+    });
+
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: textToSend, timestamp: Date.now() };
     const historyWithSignal = [{ id: 's', role: 'user', content: 'START', timestamp: 0 }, ...messages, userMsg];
+    
     setMessages(prev => [...prev, userMsg]);
     setInput(''); setIsLoading(true); setError(null);
+    
     try {
-      const nextQRaw = await getNextQuestion(historyWithSignal as Message[], mode, intensity, settings);
-      const isDone = nextQRaw.includes('[DONE]');
+      const result = await getNextQuestion(historyWithSignal as Message[], mode, intensity, settings);
+      const isDone = result.content.includes('[DONE]');
       const reachedTarget = intensity === 'QUICK' ? questionCount >= QUICK_TARGET : questionCount >= DEEP_TARGET;
       if (isDone || reachedTarget) setCanFinishEarly(true);
+      
       setMessages(prev => [...prev, { 
         id: Date.now().toString(), 
         role: 'assistant', 
-        content: nextQRaw.replace('[DONE]', '').trim(), 
+        content: result.content.replace('[DONE]', '').trim(), 
+        suggestions: result.suggestions,
         timestamp: Date.now() 
       }]);
       setQuestionCount(prev => prev + 1);
@@ -319,6 +340,26 @@ const App: React.FC = () => {
     };
     return descs[m] || "";
   }
+
+  // Helper to render suggestion chips
+  const renderSuggestions = () => {
+    const lastMsg = messages[messages.length - 1];
+    if (!lastMsg || lastMsg.role !== 'assistant' || !lastMsg.suggestions || lastMsg.suggestions.length === 0) return null;
+
+    return (
+      <div className="flex flex-wrap gap-2 mb-4 animate-in slide-in-from-bottom-2 fade-in duration-500">
+        {lastMsg.suggestions.map((s, i) => (
+          <button 
+            key={i} 
+            onClick={() => handleSend(parseBilingual(s))}
+            className="px-4 py-2 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full text-sm font-medium hover:bg-indigo-100 hover:scale-105 transition-all shadow-sm"
+          >
+            {parseBilingual(s)}
+          </button>
+        ))}
+      </div>
+    );
+  };
 
   if (state === 'landing') {
     return (
@@ -636,21 +677,22 @@ const App: React.FC = () => {
           {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} />)}
           {error && <div className="p-12 bg-red-50 rounded-[3rem] text-center space-y-6 max-w-xl mx-auto border border-red-100">
             <div className="flex items-center justify-center gap-3 text-red-500 font-bold text-xl"><AlertCircle size={28}/>{error}</div>
-            <button onClick={handleSend} className="px-10 py-4 bg-red-500 text-white rounded-2xl font-bold flex items-center gap-3 mx-auto"><RefreshCw size={20}/>{t.retryBtn}</button>
+            <button onClick={() => handleSend()} className="px-10 py-4 bg-red-500 text-white rounded-2xl font-bold flex items-center gap-3 mx-auto"><RefreshCw size={20}/>{t.retryBtn}</button>
           </div>}
           {isLoading && <div className="flex justify-center p-12 opacity-30"><Dna className="animate-spin text-indigo-500" size={40}/></div>}
         </div>
       </main>
 
       <footer className="p-8 border-t bg-white sticky bottom-0 shadow-2xl z-30">
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-4xl mx-auto space-y-4">
+          {renderSuggestions()}
           <div className="relative flex gap-4">
             <textarea 
               value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter' && !e.shiftKey){e.preventDefault();handleSend();}}} 
               placeholder={t.inputPlaceholder} rows={2} disabled={!!error || isLoading} 
               className="flex-1 p-8 bg-slate-50 rounded-[2rem] border-2 border-transparent focus:border-indigo-100 focus:bg-white outline-none text-2xl font-heiti resize-none transition-all disabled:opacity-50 shadow-inner" 
             />
-            <button onClick={handleSend} disabled={!input.trim() || isLoading || !!error} className="absolute right-4 bottom-4 p-6 bg-slate-900 text-white rounded-[1.5rem] hover:bg-black active:scale-90 transition-all disabled:opacity-20 shadow-2xl">
+            <button onClick={() => handleSend()} disabled={!input.trim() || isLoading || !!error} className="absolute right-4 bottom-4 p-6 bg-slate-900 text-white rounded-[1.5rem] hover:bg-black active:scale-90 transition-all disabled:opacity-20 shadow-2xl">
               <Send size={28}/>
             </button>
           </div>

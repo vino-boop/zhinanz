@@ -46,7 +46,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language }) => 
             : 'bg-indigo-600 text-white rounded-tr-none'
         }`}
       >
-        <div className={`text-lg md:text-xl leading-relaxed tracking-wide ${isAssistant ? 'italic' : ''}`}>
+        <div className={`text-lg md:text-xl leading-relaxed tracking-wide whitespace-pre-wrap ${isAssistant ? 'italic' : ''}`}>
           {renderFormattedText(displayContent)}
         </div>
         <div className={`mt-3 flex items-center gap-2 opacity-40 text-[10px] ${isAssistant ? 'text-gray-400' : 'text-indigo-200'}`}>

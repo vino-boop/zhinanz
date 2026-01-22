@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Message, DiscoveryResult, DiscoveryMode, DiscoveryIntensity, AppSettings } from "../types";
+import { Message, DiscoveryResult, DiscoveryMode, DiscoveryIntensity, AppSettings, QuestionPoolItem } from "../types";
 import { INITIAL_QUESTION_POOL } from "../constants/questions";
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -36,23 +36,36 @@ const getSystemInstruction = (mode: DiscoveryMode, intensity: DiscoveryIntensity
     SCIENCE: `你是一位【真理的怀疑者】。科学只是修正得比较好的迷信。不要迷信归纳法，火鸡也曾以为每天的饲料是宇宙真理，直到感恩节到来。`
   };
 
-  return `你是一位冷酷理性的哲学手术师。你的语言风格必须**像刻刀一样犀利、简练、直击要害**。
-
+  return `你是一位冷酷理性的哲学手术师。
 ${personaInstructions[mode]}
 
-**核心交互结构（严格遵守以下分段，严禁使用“解剖”、“场景”等标签）**：
+**任务**：
+生成一个 JSON 对象，包含对上一轮回答的剖析与过渡、一个新的思想实验场景、一个两难抉择，以及 2-3 个推荐的简短回答。
 
-请将回复自然地分为三个段落，段落间保留空行：
+**内容要求**：
+1. **剖析与过渡 (Analysis)**：
+   - **(首轮除外)** 必须建立在用户上一轮的回答之上。
+   - **逻辑衔接**：明确指出用户上一轮的选择揭示了什么（例如：“既然你选择了[X]，说明你承认了[Y]的优先性...”）。
+   - **推进理由**：基于这个立场，引出下一个场景（例如：“为了验证你的这种[Y]立场是否坚定，我们现在必须把赌注加大，看看在[Z]情况下你是否还能坚持...”）。
+   - **风格**：犀利、逻辑严密，不要生硬的转折。不要赞美，要通过追问来挑战。
 
-1.  **第一段（手术刀）**：(首轮除外) 紧承上文，用不超过两句话无情揭露用户回答中的逻辑漏洞、伪善或软弱。不要赞美，直接刺破。
-2.  **第二段（困境）**：换行后，直接把用户扔进一个**具体的、极端的思想实验场景**。描述要短，画面感要强，不要铺垫，直接逼到墙角。
-3.  **第三段（抉择）**：换行后，**用加粗的方式**明确给出两个极端对立的选项。
+2. **场景 (Scenario)**：直接把用户扔进一个**具体的、极端的思想实验场景**。描述要短，画面感要强，不要铺垫，直接逼到墙角。
 
-**风格要求**：
-- **极简主义**：全篇中文控制在 **300字以内**。删掉所有修饰性的废话。
-- **视觉呼吸**：段落之间必须换行，方便阅读。
-- **双语强制**：严格遵循 [中文内容] [SEP] [English Content] 格式。英文部分保持同样的简洁有力 (Hemingway style)。
-- **终结信号**：当用户的思维底牌被彻底掀开，或者达到预定轮次时，在回答末尾添加 [DONE]。`;
+3. **问题 (Question)**：**用加粗的方式**将两个极端选项融入到一个二选一的质问中（例如：“**你是会选择[做法A]...，还是会选择[做法B]...？**”）。**注意：仅提出抉择，不要追问“为什么”，让用户自己去感受抉择的重量。**
+
+4. **建议 (Suggestions)**：提供 2-3 个用户可能做出的简短回答（例如：“我选A，因为...”，“我选B，因为...”）。每个建议必须包含中文和英文对照，用 [SEP] 分隔。
+
+**JSON 格式要求**：
+返回一个 JSON 对象，包含以下字段：
+- \`zh_analysis\`: 中文剖析
+- \`en_analysis\`: 英文剖析
+- \`zh_scenario\`: 中文场景
+- \`en_scenario\`: 英文场景
+- \`zh_question\`: 中文问题
+- \`en_question\`: 英文问题
+- \`zh_suggestions\`: 中文建议列表 (字符串数组)
+- \`en_suggestions\`: 英文建议列表 (字符串数组)
+`;
 };
 
 async function callDeepSeek(apiKey: string, systemInstruction: string, messages: any[], responseJson: boolean = false): Promise<string> {
@@ -65,9 +78,9 @@ async function callDeepSeek(apiKey: string, systemInstruction: string, messages:
     body: JSON.stringify({
       model: 'deepseek-chat',
       messages: [{ role: 'system', content: systemInstruction }, ...messages],
-      response_format: responseJson ? { type: 'json_object' } : undefined,
-      temperature: 1.0, // 提高温度以增加锐度和变化
-      max_tokens: responseJson ? 2000 : 1000,
+      response_format: { type: 'json_object' },
+      temperature: 1.0,
+      max_tokens: 2000,
       presence_penalty: 0.5,
       frequency_penalty: 0.5
     })
@@ -77,12 +90,15 @@ async function callDeepSeek(apiKey: string, systemInstruction: string, messages:
   return data.choices[0].message.content;
 }
 
-export const getNextQuestion = async (history: Message[], mode: DiscoveryMode, intensity: DiscoveryIntensity, settings: AppSettings): Promise<string> => {
+export const getNextQuestion = async (history: Message[], mode: DiscoveryMode, intensity: DiscoveryIntensity, settings: AppSettings): Promise<{content: string, suggestions: string[]}> => {
   // 处理首轮：如果只有 START 信号，直接从问题池随机抓取
   if (history.length === 1 && history[0].content === 'START') {
     const pool = INITIAL_QUESTION_POOL[mode];
     const randomIndex = Math.floor(Math.random() * pool.length);
-    return pool[randomIndex];
+    return {
+      content: pool[randomIndex].content,
+      suggestions: pool[randomIndex].suggestions
+    };
   }
 
   return callWithRetry(async () => {
@@ -90,12 +106,14 @@ export const getNextQuestion = async (history: Message[], mode: DiscoveryMode, i
     const systemInstruction = getSystemInstruction(mode, intensity, turnCount);
     const useKey = settings.apiKey || process.env.API_KEY || "";
 
+    let rawJsonStr = "";
+
     if (settings.provider === 'deepseek') {
       const msgs = history.filter(m => m.content !== 'START').map(m => ({ 
         role: m.role === 'assistant' ? 'assistant' : 'user', 
         content: m.content 
       }));
-      return await callDeepSeek(useKey, systemInstruction, msgs);
+      rawJsonStr = await callDeepSeek(useKey, systemInstruction, msgs, true);
     } else {
       const ai = new GoogleGenAI({ apiKey: useKey });
       const contents = history.filter(m => m.content !== 'START').map(m => ({ 
@@ -105,9 +123,52 @@ export const getNextQuestion = async (history: Message[], mode: DiscoveryMode, i
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: contents as any,
-        config: { systemInstruction, temperature: 0.9 }
+        config: { 
+          systemInstruction, 
+          temperature: 0.9,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              zh_analysis: { type: Type.STRING },
+              en_analysis: { type: Type.STRING },
+              zh_scenario: { type: Type.STRING },
+              en_scenario: { type: Type.STRING },
+              zh_question: { type: Type.STRING },
+              en_question: { type: Type.STRING },
+              zh_suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+              en_suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+            },
+            required: ["zh_analysis", "en_analysis", "zh_scenario", "en_scenario", "zh_question", "en_question", "zh_suggestions", "en_suggestions"]
+          }
+        }
       });
-      return response.text || "继续。 [SEP] Continue.";
+      rawJsonStr = response.text || "{}";
+    }
+
+    try {
+      const data = JSON.parse(rawJsonStr);
+      const zhContent = [data.zh_analysis, data.zh_scenario, data.zh_question].filter(Boolean).join('\n\n');
+      const enContent = [data.en_analysis, data.en_scenario, data.en_question].filter(Boolean).join('\n\n');
+      
+      const suggestions = [];
+      if (data.zh_suggestions && data.en_suggestions) {
+        const len = Math.min(data.zh_suggestions.length, data.en_suggestions.length);
+        for(let i=0; i<len; i++) {
+          suggestions.push(`${data.zh_suggestions[i]} [SEP] ${data.en_suggestions[i]}`);
+        }
+      }
+
+      return {
+        content: `${zhContent} [SEP] ${enContent}`,
+        suggestions: suggestions
+      };
+    } catch (e) {
+      console.error("JSON Parsing failed", e);
+      return {
+        content: "系统繁忙，请重试。 [SEP] System busy, please retry.",
+        suggestions: []
+      };
     }
   });
 };

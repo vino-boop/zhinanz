@@ -19,6 +19,12 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  suggestions?: string[];
+}
+
+export interface QuestionPoolItem {
+  content: string;
+  suggestions: string[];
 }
 
 export interface DiscoveryResult {
