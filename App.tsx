@@ -8,7 +8,7 @@ import {
   Compass, Send, RefreshCw, Sparkles, ArrowRight, Quote, Languages, Scale, 
   ScrollText, FileImage, Layers, Zap, Dna, Target, Timer, Infinity as InfinityIcon, AlertCircle, Settings, X, Key,
   BrainCircuit, Fingerprint, Cpu, Network, MessageSquare, FlaskConical, Binary, Eye,
-  Dices, LayoutGrid, RotateCcw
+  Dices, LayoutGrid, RotateCcw, User, Lock, Mail, Github, Menu
 } from 'lucide-react';
 
 declare const html2canvas: any;
@@ -66,8 +66,18 @@ const i18n = {
     settingsTitle: "核心设置",
     providerLabel: "智能引擎",
     apiKeyPlaceholder: "输入您的 API Key",
-    saveBtn: "确认",
-    customKeyTip: "选择引擎并配置 Key。DeepSeek 提供更犀利的逻辑，Gemini 提供更广博的视野。"
+    saveBtn: "确认保存",
+    customKeyTip: "选择引擎并配置 Key。DeepSeek 提供更犀利的逻辑，Gemini 提供更广博的视野。",
+    loginTitle: "登录探索者",
+    loginDesc: "开启您的哲学探索之旅",
+    usernamePlaceholder: "用户名 / 邮箱",
+    passwordPlaceholder: "密码",
+    loginBtn: "登录 / 注册",
+    wechatLogin: "微信登录",
+    guestLogin: "游客访问",
+    fateAwaits: "命运降临",
+    tapToReveal: "点击下方按钮揭晓",
+    menu: "菜单"
   },
   en: {
     title: "Explorer's Compass",
@@ -118,8 +128,18 @@ const i18n = {
     settingsTitle: "Engine Settings",
     providerLabel: "AI Engine",
     apiKeyPlaceholder: "Enter your API Key",
-    saveBtn: "Confirm",
-    customKeyTip: "Select your engine. DeepSeek for logic, Gemini for breadth."
+    saveBtn: "Save Changes",
+    customKeyTip: "Select your engine. DeepSeek for logic, Gemini for breadth.",
+    loginTitle: "Login",
+    loginDesc: "Begin your philosophical odyssey",
+    usernamePlaceholder: "Username / Email",
+    passwordPlaceholder: "Password",
+    loginBtn: "Login / Register",
+    wechatLogin: "WeChat",
+    guestLogin: "Guest Mode",
+    fateAwaits: "Fate Awaits",
+    tapToReveal: "Tap button to reveal",
+    menu: "Menu"
   }
 };
 
@@ -139,7 +159,7 @@ const SLOT_ITEMS = [...MODE_DEFINITIONS, ...MODE_DEFINITIONS, ...MODE_DEFINITION
 const ITEM_HEIGHT = 160; // px
 
 const App: React.FC = () => {
-  const [state, setState] = useState<AppState>('landing');
+  const [state, setState] = useState<AppState>('auth');
   const [mode, setMode] = useState<DiscoveryMode | null>(null);
   const [intensity, setIntensity] = useState<DiscoveryIntensity>('QUICK');
   const [lang, setLang] = useState<Language>('zh');
@@ -155,6 +175,7 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showAllModes, setShowAllModes] = useState(false);
   const [isSpinning, setIsSpinning] = useState(false);
+  const [isSlotRevealed, setIsSlotRevealed] = useState(false); // New state to control slot machine visibility
   const [drawnMode, setDrawnMode] = useState<DiscoveryMode | null>(null);
   const slotRef = useRef<HTMLDivElement>(null);
   
@@ -185,6 +206,7 @@ const App: React.FC = () => {
     setCanFinishEarly(false);
     setDrawnMode(null);
     setIsSpinning(false);
+    setIsSlotRevealed(false); // Reset slot reveal state
   };
 
   const selectMode = (m: DiscoveryMode) => { setMode(m); setState('intensity_select'); setShowAllModes(false); };
@@ -195,6 +217,8 @@ const App: React.FC = () => {
 
   const startSpin = () => {
     if (isSpinning) return;
+    
+    setIsSlotRevealed(true); // Reveal the slot machine
     setIsSpinning(true);
     setDrawnMode(null);
 
@@ -361,37 +385,88 @@ const App: React.FC = () => {
     );
   };
 
+  if (state === 'auth') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-100 rounded-full blur-[100px] -mr-48 -mt-48 opacity-50 animate-pulse"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-100 rounded-full blur-[100px] -ml-48 -mb-48 opacity-50"></div>
+
+        <div className="w-full max-w-md bg-white p-10 rounded-[2.5rem] shadow-2xl relative z-10 space-y-8 border border-slate-100">
+          <div className="text-center space-y-4">
+             <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-lg shadow-indigo-200">
+                <Compass className="text-white" size={40} />
+             </div>
+             <div>
+                <h1 className="text-3xl font-serif font-bold text-slate-900">{t.title}</h1>
+                <p className="text-slate-500 text-sm mt-1">{t.loginDesc}</p>
+             </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="relative">
+               <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+               <input 
+                 type="text" 
+                 placeholder={t.usernamePlaceholder}
+                 className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
+               />
+            </div>
+            <div className="relative">
+               <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+               <input 
+                 type="password" 
+                 placeholder={t.passwordPlaceholder}
+                 className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
+               />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <button 
+              onClick={() => setState('landing')}
+              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
+            >
+              <ArrowRight size={20} />
+              {t.loginBtn}
+            </button>
+            
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
+              <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-slate-400">Or continue with</span></div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <button onClick={() => setState('landing')} className="py-3 px-4 bg-green-50 text-green-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-100 transition-colors">
+                <MessageSquare size={18} />
+                {t.wechatLogin}
+              </button>
+              <button onClick={() => setState('landing')} className="py-3 px-4 bg-slate-50 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors">
+                <User size={18} />
+                {t.guestLogin}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (state === 'landing') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
         {/* Header Options */}
-        <div className="absolute top-8 right-8 flex gap-3 z-50 items-center">
-          <div className="bg-white px-1.5 py-1.5 rounded-full shadow-sm border border-slate-100 flex gap-1">
-             {['gemini', 'deepseek'].map(p => (
-               <button 
-                key={p} 
-                onClick={() => saveSettings({...settings, provider: p as ApiProvider})}
-                className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${settings.provider === p ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
-               >
-                 {p}
-               </button>
-             ))}
-          </div>
-          <button onClick={() => setShowSettings(true)} className="p-3 bg-white shadow-sm rounded-full text-indigo-600 border border-slate-100 hover:shadow-md transition-all"><Settings size={18} /></button>
-          <button onClick={() => setLang(l => l === 'zh' ? 'en' : 'zh')} className="px-5 py-3 bg-white shadow-sm rounded-full text-xs font-bold text-indigo-600 border border-slate-100">{t.langToggle}</button>
-          
+        <div className="absolute top-8 right-8 z-50">
           <button 
-            onClick={() => setShowAllModes(true)} 
-            className="flex items-center gap-2 px-5 py-3 bg-white shadow-sm rounded-full text-xs font-bold text-slate-600 border border-slate-100 hover:shadow-md transition-all hover:text-indigo-600"
+            onClick={() => setShowSettings(true)} 
+            className="p-4 bg-white shadow-sm rounded-full text-slate-600 border border-slate-100 hover:shadow-md transition-all hover:scale-105 active:scale-95 hover:text-indigo-600"
           >
-            <LayoutGrid size={16} />
-            {t.viewAll}
+            <Settings size={24} />
           </button>
         </div>
 
         {/* View All Overlay */}
         {showAllModes && (
-          <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto">
+          <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
              <div className="max-w-6xl mx-auto p-8 space-y-8">
                <div className="flex justify-between items-center">
                  <h2 className="text-3xl font-serif font-bold text-slate-900">{t.allModesTitle}</h2>
@@ -414,24 +489,68 @@ const App: React.FC = () => {
 
         {/* Settings Overlay */}
         {showSettings && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 space-y-8 relative">
-              <button onClick={() => setShowSettings(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600"><X size={24} /></button>
-              <div className="space-y-2">
-                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mb-4"><Key size={24}/></div>
-                <h3 className="text-3xl font-bold font-serif">{t.settingsTitle}</h3>
-                <p className="text-sm text-slate-500">{t.customKeyTip}</p>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 space-y-8 relative">
+              <button onClick={() => setShowSettings(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 transition-colors"><X size={24} /></button>
+              
+              <div className="text-center space-y-2">
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-2"><Settings size={24}/></div>
+                <h3 className="text-2xl font-serif font-bold text-slate-900">{t.settingsTitle}</h3>
               </div>
+
               <div className="space-y-6">
+                {/* Language */}
                 <div className="space-y-3">
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">API Key</label>
-                  <input 
-                    type="password" value={settings.apiKey} onChange={e => setSettings(s => ({ ...s, apiKey: e.target.value }))}
-                    placeholder={t.apiKeyPlaceholder}
-                    className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm"
-                  />
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">Language / 语言</label>
+                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                      <button onClick={() => setLang('zh')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${lang === 'zh' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>中文</button>
+                      <button onClick={() => setLang('en')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${lang === 'en' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>English</button>
+                    </div>
                 </div>
-                <button onClick={() => saveSettings(settings)} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition-all">{t.saveBtn}</button>
+
+                {/* Provider */}
+                <div className="space-y-3">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">{t.providerLabel}</label>
+                    <div className="flex bg-slate-100 p-1 rounded-xl">
+                      {['gemini', 'deepseek'].map(p => (
+                        <button 
+                          key={p} 
+                          onClick={() => setSettings(s => ({...s, provider: p as ApiProvider}))}
+                          className={`flex-1 py-3 rounded-lg text-sm font-bold uppercase transition-all ${settings.provider === p ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400 px-1">{t.customKeyTip}</p>
+                </div>
+
+                {/* API Key */}
+                <div className="space-y-3">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">API Key</label>
+                    <div className="relative">
+                      <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input 
+                        type="password" value={settings.apiKey} onChange={e => setSettings(s => ({ ...s, apiKey: e.target.value }))}
+                        placeholder={t.apiKeyPlaceholder}
+                        className="w-full pl-10 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
+                      />
+                    </div>
+                </div>
+
+                {/* Actions */}
+                <div className="pt-2 space-y-3">
+                    <button onClick={() => saveSettings(settings)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-lg hover:bg-black transition-all">
+                      {t.saveBtn}
+                    </button>
+                    <button 
+                      onClick={() => { setShowSettings(false); setShowAllModes(true); }} 
+                      className="w-full py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                    >
+                      <LayoutGrid size={18} />
+                      {t.viewAll}
+                    </button>
+                </div>
               </div>
             </div>
           </div>
@@ -454,6 +573,7 @@ const App: React.FC = () => {
                {/* Center highlight line */}
                <div className="absolute top-1/2 left-4 right-4 h-0.5 bg-indigo-500/20 -translate-y-1/2 z-0"></div>
 
+               {/* The Slot Machine Reels (Always rendered for layout) */}
                <div ref={slotRef} className="w-full">
                   {SLOT_ITEMS.map((m, i) => (
                     <div key={i} className="flex flex-col items-center justify-center gap-2" style={{height: ITEM_HEIGHT}}>
@@ -467,6 +587,18 @@ const App: React.FC = () => {
                     </div>
                   ))}
                </div>
+
+               {/* Mystery Card Overlay - Covers slot machine until revealed */}
+               {!isSlotRevealed && (
+                  <div className="absolute inset-0 z-20 bg-slate-900 rounded-[3rem] flex flex-col items-center justify-center text-white p-6 shadow-2xl transition-all duration-700 cursor-default">
+                    <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mb-4 backdrop-blur-sm">
+                       <Sparkles size={32} className="text-indigo-300 animate-pulse" />
+                    </div>
+                    <h3 className="text-2xl font-serif font-bold text-center text-white">{t.fateAwaits}</h3>
+                    <div className="w-8 h-1 bg-indigo-500 rounded-full my-3"></div>
+                    <p className="text-white/40 text-[10px] uppercase tracking-[0.2em] text-center">{t.tapToReveal}</p>
+                  </div>
+               )}
             </div>
 
             {/* Controls */}

@@ -37,4 +37,4 @@ export interface DiscoveryResult {
   dimensions: Dimension[];
 }
 
-export type AppState = 'landing' | 'intensity_select' | 'chatting' | 'analyzing' | 'result';
+export type AppState = 'auth' | 'landing' | 'intensity_select' | 'chatting' | 'analyzing' | 'result';
