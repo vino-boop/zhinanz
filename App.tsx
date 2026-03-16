@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Message, DiscoveryResult, AppState, Language, DiscoveryMode, DiscoveryIntensity, AppSettings, ApiProvider } from './types';
 import { getNextQuestion, generateFinalAnalysis } from './services/aiService';
 import { ChatBubble } from './components/ChatBubble';
@@ -384,6 +384,10 @@ const App: React.FC = () => {
       </div>
     );
   };
+
+  const handleTyping = useCallback(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, []);
 
   if (state === 'auth') {
     return (
@@ -782,7 +786,7 @@ const App: React.FC = () => {
           </div>
         </div>
         <div style={{display:'none'}}><div ref={chatContainerRef} className="bg-white p-24 w-[1000px] flex flex-col gap-10 export-container">
-          {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} />)}
+          {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} skipTyping />)}
         </div></div>
       </div>
     );
@@ -806,7 +810,7 @@ const App: React.FC = () => {
 
       <main ref={scrollRef} className="flex-1 overflow-y-auto pt-16 pb-40">
         <div className="max-w-4xl mx-auto px-6">
-          {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} />)}
+          {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} onTyping={handleTyping} />)}
           {error && <div className="p-12 bg-red-50 rounded-[3rem] text-center space-y-6 max-w-xl mx-auto border border-red-100">
             <div className="flex items-center justify-center gap-3 text-red-500 font-bold text-xl"><AlertCircle size={28}/>{error}</div>
             <button onClick={() => handleSend()} className="px-10 py-4 bg-red-500 text-white rounded-2xl font-bold flex items-center gap-3 mx-auto"><RefreshCw size={20}/>{t.retryBtn}</button>

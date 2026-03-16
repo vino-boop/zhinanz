@@ -1,26 +1,17 @@
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Message, Language } from '../types';
 
 interface ChatBubbleProps {
   message: Message;
   language: Language;
+  onTyping?: () => void;
+  skipTyping?: boolean;
 }
 
-export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language }) => {
+export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyping, skipTyping }) => {
   const isAssistant = message.role === 'assistant';
   
-  const renderFormattedText = (text: string) => {
-    // 简单的 Markdown 粗体转换 (**text** -> <b>text</b>)
-    const parts = text.split(/(\*\*.*?\*\*)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i}>{part.slice(2, -2)}</strong>;
-      }
-      return part;
-    });
-  };
-
   const getDisplayContent = (text: string) => {
     if (!isAssistant) return text;
     
@@ -35,7 +26,53 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language }) => 
     return content.trim();
   };
 
-  const displayContent = getDisplayContent(message.content);
+  const fullContent = getDisplayContent(message.content);
+  
+  const [isTyping, setIsTyping] = useState(isAssistant && !skipTyping);
+  const [displayedText, setDisplayedText] = useState(isAssistant && !skipTyping ? '' : fullContent);
+  const contentRef = useRef(fullContent);
+
+  useEffect(() => {
+    if (!isAssistant || skipTyping) {
+      setDisplayedText(fullContent);
+      return;
+    }
+
+    // If language changed after initial typing, just show full text instantly
+    if (contentRef.current !== fullContent && !isTyping) {
+      setDisplayedText(fullContent);
+      contentRef.current = fullContent;
+      return;
+    }
+
+    if (isTyping) {
+      let currentIndex = 0;
+      const intervalId = setInterval(() => {
+        if (currentIndex <= fullContent.length) {
+          setDisplayedText(fullContent.slice(0, currentIndex));
+          currentIndex++;
+          if (onTyping) onTyping();
+        } else {
+          clearInterval(intervalId);
+          setIsTyping(false);
+          contentRef.current = fullContent;
+        }
+      }, 30); // Adjust speed here
+
+      return () => clearInterval(intervalId);
+    }
+  }, [fullContent, isAssistant, isTyping, onTyping, skipTyping]);
+
+  const renderFormattedText = (text: string) => {
+    // 简单的 Markdown 粗体转换 (**text** -> <b>text</b>)
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i}>{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
 
   return (
     <div className={`flex w-full mb-8 ${isAssistant ? 'justify-start' : 'justify-end'}`}>
@@ -47,7 +84,8 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language }) => 
         }`}
       >
         <div className={`text-lg md:text-xl leading-relaxed tracking-wide whitespace-pre-wrap ${isAssistant ? 'italic' : ''}`}>
-          {renderFormattedText(displayContent)}
+          {renderFormattedText(displayedText)}
+          {isAssistant && isTyping && <span className="inline-block w-2 h-5 ml-1 bg-indigo-400 animate-pulse align-middle"></span>}
         </div>
         <div className={`mt-3 flex items-center gap-2 opacity-40 text-[10px] ${isAssistant ? 'text-gray-400' : 'text-indigo-200'}`}>
           <span>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
