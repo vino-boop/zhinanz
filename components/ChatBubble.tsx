@@ -26,7 +26,19 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
     return content.trim();
   };
 
-  const fullContent = getDisplayContent(message.content);
+  const parseMessageContent = (content: string) => {
+    const match = content.match(/^(?:【扮演者：|\[Persona:\s*)([^】\]]+)(?:】|\])\s*([\s\S]*)$/i);
+    if (match) {
+      return {
+        persona: match[1].trim(),
+        text: match[2].trim()
+      };
+    }
+    return { persona: null, text: content };
+  };
+
+  const rawContent = getDisplayContent(message.content);
+  const { persona, text: fullContent } = parseMessageContent(rawContent);
   
   const [isTyping, setIsTyping] = useState(isAssistant && !skipTyping);
   const [displayedText, setDisplayedText] = useState(isAssistant && !skipTyping ? '' : fullContent);
@@ -83,6 +95,14 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
             : 'bg-indigo-600 text-white rounded-tr-none'
         }`}
       >
+        {persona && (
+          <div className="flex items-center gap-2 mb-3 text-indigo-600 font-bold text-sm tracking-widest uppercase">
+            <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center">
+              <span className="text-[12px]">🎭</span>
+            </div>
+            {persona}
+          </div>
+        )}
         <div className={`text-lg md:text-xl leading-relaxed tracking-wide whitespace-pre-wrap ${isAssistant ? 'italic' : ''}`}>
           {renderFormattedText(displayedText)}
           {isAssistant && isTyping && <span className="inline-block w-2 h-5 ml-1 bg-indigo-400 animate-pulse align-middle"></span>}

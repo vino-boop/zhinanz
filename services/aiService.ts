@@ -1,4 +1,5 @@
 import { Message, DiscoveryResult, DiscoveryMode, DiscoveryIntensity, AppSettings } from "../types";
+import { getPersonaInstruction } from "../personas";
 
 // 后端 API 地址
 const API_BASE = 'https://thinking.vinolab.tech';
@@ -37,8 +38,11 @@ export const getNextQuestion = async (
   history: Message[], 
   mode: DiscoveryMode, 
   intensity: DiscoveryIntensity, 
-  settings: AppSettings
+  settings: AppSettings,
+  lang: string = 'zh'
 ): Promise<{content: string, suggestions: string[]}> => {
+  const instruction = getPersonaInstruction(mode, lang);
+
   // 首轮或没有 session 时，创建新会话
   if (!sessionId || history.length === 0 || (history.length === 1 && history[0].content === 'START')) {
     return callWithRetry(async () => {
@@ -48,8 +52,7 @@ export const getNextQuestion = async (
         body: JSON.stringify({
           mode: mode,
           intensity: intensity,
-          provider: settings.provider || 'deepseek',
-          apiKey: settings.apiKey
+          personaContext: instruction
         })
       });
       
@@ -70,12 +73,14 @@ export const getNextQuestion = async (
       throw new Error('No user message found');
     }
 
+    const contentWithPersona = `${lastUserMessage.content}\n\n${instruction}`;
+
     const response = await fetch(`${API_BASE}/api/chat/message`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sessionId: sessionId,
-        content: lastUserMessage.content
+        content: contentWithPersona
       })
     });
 

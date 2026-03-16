@@ -63,7 +63,7 @@ const i18n = {
     dimensionTitle: "真我能量矩阵",
     errorQuota: "连接中断。请检查网络或 API 额度。",
     retryBtn: "重新发送",
-    settingsTitle: "核心设置",
+    settingsTitle: "设置",
     providerLabel: "智能引擎",
     apiKeyPlaceholder: "输入您的 API Key",
     saveBtn: "确认保存",
@@ -125,7 +125,7 @@ const i18n = {
     dimensionTitle: "Authenticity Matrix",
     errorQuota: "Connection failed. Check API or network.",
     retryBtn: "Retry",
-    settingsTitle: "Engine Settings",
+    settingsTitle: "Settings",
     providerLabel: "AI Engine",
     apiKeyPlaceholder: "Enter your API Key",
     saveBtn: "Save Changes",
@@ -256,7 +256,7 @@ const App: React.FC = () => {
   const startJourney = async (m: DiscoveryMode, i: DiscoveryIntensity) => {
     setIsLoading(true); setError(null);
     try {
-      const result = await getNextQuestion([{ id: 'start-signal', role: 'user', content: 'START', timestamp: Date.now() }], m, i, settings);
+      const result = await getNextQuestion([{ id: 'start-signal', role: 'user', content: 'START', timestamp: Date.now() }], m, i, settings, lang);
       setMessages([{ 
         id: Date.now().toString(), 
         role: 'assistant', 
@@ -289,7 +289,7 @@ const App: React.FC = () => {
     setInput(''); setIsLoading(true); setError(null);
     
     try {
-      const result = await getNextQuestion(historyWithSignal as Message[], mode, intensity, settings);
+      const result = await getNextQuestion(historyWithSignal as Message[], mode, intensity, settings, lang);
       const isDone = result.content.includes('[DONE]');
       const reachedTarget = intensity === 'QUICK' ? questionCount >= QUICK_TARGET : questionCount >= DEEP_TARGET;
       if (isDone || reachedTarget) setCanFinishEarly(true);
@@ -510,36 +510,6 @@ const App: React.FC = () => {
                     <div className="flex bg-slate-100 p-1 rounded-xl">
                       <button onClick={() => setLang('zh')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${lang === 'zh' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>中文</button>
                       <button onClick={() => setLang('en')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${lang === 'en' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>English</button>
-                    </div>
-                </div>
-
-                {/* Provider */}
-                <div className="space-y-3">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">{t.providerLabel}</label>
-                    <div className="flex bg-slate-100 p-1 rounded-xl">
-                      {['gemini', 'deepseek'].map(p => (
-                        <button 
-                          key={p} 
-                          onClick={() => setSettings(s => ({...s, provider: p as ApiProvider}))}
-                          className={`flex-1 py-3 rounded-lg text-sm font-bold uppercase transition-all ${settings.provider === p ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}
-                        >
-                          {p}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-slate-400 px-1">{t.customKeyTip}</p>
-                </div>
-
-                {/* API Key */}
-                <div className="space-y-3">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">API Key</label>
-                    <div className="relative">
-                      <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                      <input 
-                        type="password" value={settings.apiKey} onChange={e => setSettings(s => ({ ...s, apiKey: e.target.value }))}
-                        placeholder={t.apiKeyPlaceholder}
-                        className="w-full pl-10 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
-                      />
                     </div>
                 </div>
 
