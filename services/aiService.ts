@@ -69,7 +69,7 @@ ${personaInstructions[mode]}
 };
 
 async function callDeepSeek(apiKey: string, systemInstruction: string, messages: any[], responseJson: boolean = false): Promise<string> {
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+  const response = await fetch('https://thinking.vinolab.tech/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -115,7 +115,7 @@ export const getNextQuestion = async (history: Message[], mode: DiscoveryMode, i
       }));
       rawJsonStr = await callDeepSeek(useKey, systemInstruction, msgs, true);
     } else {
-      const ai = new GoogleGenAI({ apiKey: useKey });
+      const ai = new GoogleGenAI({ apiKey: useKey, httpOptions: { baseUrl: 'https://thinking.vinolab.tech' } });
       const contents = history.filter(m => m.content !== 'START').map(m => ({ 
         role: m.role === 'assistant' ? 'model' : 'user', 
         parts: [{ text: m.content }] 
@@ -235,7 +235,7 @@ export const generateFinalAnalysis = async (history: Message[], mode: DiscoveryM
       const resultStr = await callDeepSeek(useKey, "JSON Philosophical Pathologist", [{ role: 'user', content: prompt }], true);
       return JSON.parse(resultStr);
     } else {
-      const ai = new GoogleGenAI({ apiKey: useKey });
+      const ai = new GoogleGenAI({ apiKey: useKey, httpOptions: { baseUrl: 'https://thinking.vinolab.tech' } });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: [{ parts: [{ text: prompt }] }],

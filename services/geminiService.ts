@@ -66,7 +66,7 @@ ${personaInstructions[mode]}
 };
 
 async function callDeepSeek(apiKey: string, systemInstruction: string, messages: any[], responseJson: boolean = false): Promise<string> {
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+  const response = await fetch('https://thinking.vinolab.tech/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -92,7 +92,7 @@ export const getNextQuestion = async (history: Message[], mode: DiscoveryMode, i
       const msgs = history.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
       return await callDeepSeek(useKey, systemInstruction, msgs);
     } else {
-      const ai = new GoogleGenAI({ apiKey: useKey });
+      const ai = new GoogleGenAI({ apiKey: useKey, httpOptions: { baseUrl: 'https://thinking.vinolab.tech' } });
       const contents = history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
@@ -144,7 +144,7 @@ export const generateFinalAnalysis = async (history: Message[], mode: DiscoveryM
       const resultStr = await callDeepSeek(useKey, "Ethical & Philosophical Engine", [{ role: 'user', content: prompt }], true);
       return JSON.parse(resultStr);
     } else {
-      const ai = new GoogleGenAI({ apiKey: useKey });
+      const ai = new GoogleGenAI({ apiKey: useKey, httpOptions: { baseUrl: 'https://thinking.vinolab.tech' } });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: [{ parts: [{ text: prompt }] }],
