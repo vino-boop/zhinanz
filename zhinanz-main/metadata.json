@@ -1,0 +1,7 @@
+{
+  "name": "Ikigai Compass",
+  "description": "A self-discovery journey where an AI guide leads you through a series of profound questions to help you uncover your life's purpose and future direction.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
