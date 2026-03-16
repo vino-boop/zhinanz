@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Message, DiscoveryResult, AppState, Language, DiscoveryMode, DiscoveryIntensity, AppSettings, ApiProvider } from './types';
-import { getNextQuestion, generateFinalAnalysis } from './services/aiService';
+import { getNextQuestion, generateFinalAnalysis, clearSession } from './services/aiService';
 import { ChatBubble } from './components/ChatBubble';
 import { ProgressBar } from './components/ProgressBar';
 import { 
@@ -200,6 +200,7 @@ const App: React.FC = () => {
   };
 
   const reset = () => {
+    clearSession();
     setState('landing'); setMode(null); setIntensity('QUICK');
     setMessages([]); setInput(''); setIsLoading(false);
     setError(null); setResult(null); setQuestionCount(0);
