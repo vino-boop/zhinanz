@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Message, DiscoveryResult, AppState, Language, DiscoveryMode, DiscoveryIntensity, AppSettings, ApiProvider } from './types';
-import { getNextQuestion, generateFinalAnalysis, clearSession } from './services/aiService';
+import { streamNextQuestion, generateFinalAnalysis, clearSession } from './services/aiService';
 import { ChatBubble } from './components/ChatBubble';
 import { ProgressBar } from './components/ProgressBar';
+import { INITIAL_QUESTION_POOL } from './constants/questions';
 import { 
   Compass, Send, RefreshCw, Sparkles, ArrowRight, Quote, Languages, Scale, 
   ScrollText, FileImage, Layers, Zap, Dna, Target, Timer, Infinity as InfinityIcon, AlertCircle, Settings, X, Key,
@@ -170,6 +171,7 @@ const App: React.FC = () => {
   const [result, setResult] = useState<DiscoveryResult | null>(null);
   const [questionCount, setQuestionCount] = useState(0);
   const [canFinishEarly, setCanFinishEarly] = useState(false);
+  const startContentRef = useRef<string>('START');
   
   // Settings & Lottery State
   const [showSettings, setShowSettings] = useState(false);
@@ -177,8 +179,6 @@ const App: React.FC = () => {
   const [isSpinning, setIsSpinning] = useState(false);
   const [isSlotRevealed, setIsSlotRevealed] = useState(false); // New state to control slot machine visibility
   const [drawnMode, setDrawnMode] = useState<DiscoveryMode | null>(null);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const slotRef = useRef<HTMLDivElement>(null);
   
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -258,14 +258,21 @@ const App: React.FC = () => {
   const startJourney = async (m: DiscoveryMode, i: DiscoveryIntensity) => {
     setIsLoading(true); setError(null);
     try {
-      const result = await getNextQuestion([{ id: 'start-signal', role: 'user', content: 'START', timestamp: Date.now() }], m, i, settings, lang);
-      setMessages([{ 
-        id: Date.now().toString(), 
-        role: 'assistant', 
-        content: result.content, 
-        suggestions: result.suggestions,
-        timestamp: Date.now() 
-      }]);
+      const pool = INITIAL_QUESTION_POOL[m];
+      const randomQ = pool[Math.floor(Math.random() * pool.length)];
+      const startContent = `START:${randomQ.content}|SUGGESTIONS:${JSON.stringify(randomQ.suggestions)}`;
+      startContentRef.current = startContent;
+      
+      const turnId = `start-${Date.now()}`;
+      const stream = streamNextQuestion([{ id: 'start-signal', role: 'user', content: startContent, timestamp: Date.now() }], m, i, settings, lang);
+      
+      for await (const { messages: parsedMessages } of stream) {
+        setMessages(parsedMessages.map((msg, idx) => ({
+          ...msg,
+          id: `${turnId}-${idx}`
+        })));
+      }
+      
       setQuestionCount(1);
     } catch (e: any) { setError(e.message || t.errorQuota); }
     finally { setIsLoading(false); }
@@ -284,25 +291,32 @@ const App: React.FC = () => {
         return prev;
     });
 
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: textToSend, timestamp: Date.now() };
-    const historyWithSignal = [{ id: 's', role: 'user', content: 'START', timestamp: 0 }, ...messages, userMsg];
+    const userMsg: Message = { id: `user-${Date.now()}`, role: 'user', content: textToSend, timestamp: Date.now() };
+    const historyWithSignal = [{ id: 's', role: 'user', content: startContentRef.current, timestamp: 0 }, ...messages, userMsg];
     
     setMessages(prev => [...prev, userMsg]);
     setInput(''); setIsLoading(true); setError(null);
     
     try {
-      const result = await getNextQuestion(historyWithSignal as Message[], mode, intensity, settings, lang);
-      const isDone = result.content.includes('[DONE]');
-      const reachedTarget = intensity === 'QUICK' ? questionCount >= QUICK_TARGET : questionCount >= DEEP_TARGET;
-      if (isDone || reachedTarget) setCanFinishEarly(true);
+      const turnId = `turn-${Date.now()}`;
+      const stream = streamNextQuestion(historyWithSignal as Message[], mode, intensity, settings, lang);
       
-      setMessages(prev => [...prev, { 
-        id: Date.now().toString(), 
-        role: 'assistant', 
-        content: result.content.replace('[DONE]', '').trim(), 
-        suggestions: result.suggestions,
-        timestamp: Date.now() 
-      }]);
+      let finalIsDone = false;
+      for await (const { messages: parsedMessages, isDone } of stream) {
+        finalIsDone = isDone;
+        setMessages(prev => {
+          const filtered = prev.filter(m => !m.id.startsWith(turnId));
+          const newMessages = parsedMessages.map((msg, idx) => ({
+            ...msg,
+            id: `${turnId}-${idx}`
+          }));
+          return [...filtered, ...newMessages];
+        });
+      }
+      
+      const reachedTarget = intensity === 'QUICK' ? questionCount >= QUICK_TARGET : questionCount >= DEEP_TARGET;
+      if (finalIsDone || reachedTarget) setCanFinishEarly(true);
+      
       setQuestionCount(prev => prev + 1);
     } catch (e: any) { setError(e.message || t.errorQuota); }
     finally { setIsLoading(false); }
@@ -414,7 +428,7 @@ const App: React.FC = () => {
                <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                <input 
                  type="text" 
-                 value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t.usernamePlaceholder}
+                 placeholder={t.usernamePlaceholder}
                  className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
                />
             </div>
@@ -422,7 +436,7 @@ const App: React.FC = () => {
                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                <input 
                  type="password" 
-                 value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t.passwordPlaceholder}
+                 placeholder={t.passwordPlaceholder}
                  className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
                />
             </div>
@@ -430,13 +444,7 @@ const App: React.FC = () => {
 
           <div className="space-y-4">
             <button 
-              onClick={async () => {
-                if (username && password) {
-                  localStorage.setItem('username', username);
-                  localStorage.setItem('password', password);
-                }
-                setState('landing');
-              }}
+              onClick={() => setState('landing')}
               className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
             >
               <ArrowRight size={20} />
@@ -449,23 +457,11 @@ const App: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <button onClick={async () => {
-                if (username && password) {
-                  localStorage.setItem('username', username);
-                  localStorage.setItem('password', password);
-                }
-                setState('landing');
-              }} className="py-3 px-4 bg-green-50 text-green-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-100 transition-colors">
+              <button onClick={() => setState('landing')} className="py-3 px-4 bg-green-50 text-green-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-100 transition-colors">
                 <MessageSquare size={18} />
                 {t.wechatLogin}
               </button>
-              <button onClick={async () => {
-                if (username && password) {
-                  localStorage.setItem('username', username);
-                  localStorage.setItem('password', password);
-                }
-                setState('landing');
-              }} className="py-3 px-4 bg-slate-50 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors">
+              <button onClick={() => setState('landing')} className="py-3 px-4 bg-slate-50 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors">
                 <User size={18} />
                 {t.guestLogin}
               </button>
@@ -636,13 +632,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50">
         <div className="max-w-2xl text-center space-y-12">
-          <button onClick={async () => {
-                if (username && password) {
-                  localStorage.setItem('username', username);
-                  localStorage.setItem('password', password);
-                }
-                setState('landing');
-              }} className="text-slate-400 font-bold flex items-center gap-2 mx-auto hover:text-indigo-600 transition-colors"><ArrowRight className="rotate-180" size={16}/>{t.backBtn}</button>
+          <button onClick={() => setState('landing')} className="text-slate-400 font-bold flex items-center gap-2 mx-auto hover:text-indigo-600 transition-colors"><ArrowRight className="rotate-180" size={16}/>{t.backBtn}</button>
           <h1 className="text-5xl font-serif font-bold text-slate-900">{t.intensityTitle}</h1>
           <p className="text-lg text-slate-500">{t.intensityDesc}</p>
           <div className="grid md:grid-cols-2 gap-8">

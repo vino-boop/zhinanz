@@ -17,6 +17,7 @@ export interface Dimension {
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
+  speaker?: string; // e.g., 'Judge', 'Persona: Camus'
   content: string;
   timestamp: number;
   suggestions?: string[];
