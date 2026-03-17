@@ -177,6 +177,8 @@ const App: React.FC = () => {
   const [isSpinning, setIsSpinning] = useState(false);
   const [isSlotRevealed, setIsSlotRevealed] = useState(false); // New state to control slot machine visibility
   const [drawnMode, setDrawnMode] = useState<DiscoveryMode | null>(null);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const slotRef = useRef<HTMLDivElement>(null);
   
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -412,7 +414,7 @@ const App: React.FC = () => {
                <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                <input 
                  type="text" 
-                 placeholder={t.usernamePlaceholder}
+                 value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t.usernamePlaceholder}
                  className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
                />
             </div>
@@ -420,7 +422,7 @@ const App: React.FC = () => {
                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                <input 
                  type="password" 
-                 placeholder={t.passwordPlaceholder}
+                 value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t.passwordPlaceholder}
                  className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
                />
             </div>
@@ -428,7 +430,13 @@ const App: React.FC = () => {
 
           <div className="space-y-4">
             <button 
-              onClick={() => setState('landing')}
+              onClick={async () => {
+                if (username && password) {
+                  localStorage.setItem('username', username);
+                  localStorage.setItem('password', password);
+                }
+                setState('landing');
+              }}
               className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
             >
               <ArrowRight size={20} />
@@ -441,11 +449,23 @@ const App: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => setState('landing')} className="py-3 px-4 bg-green-50 text-green-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-100 transition-colors">
+              <button onClick={async () => {
+                if (username && password) {
+                  localStorage.setItem('username', username);
+                  localStorage.setItem('password', password);
+                }
+                setState('landing');
+              }} className="py-3 px-4 bg-green-50 text-green-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-100 transition-colors">
                 <MessageSquare size={18} />
                 {t.wechatLogin}
               </button>
-              <button onClick={() => setState('landing')} className="py-3 px-4 bg-slate-50 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors">
+              <button onClick={async () => {
+                if (username && password) {
+                  localStorage.setItem('username', username);
+                  localStorage.setItem('password', password);
+                }
+                setState('landing');
+              }} className="py-3 px-4 bg-slate-50 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors">
                 <User size={18} />
                 {t.guestLogin}
               </button>
@@ -616,7 +636,13 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50">
         <div className="max-w-2xl text-center space-y-12">
-          <button onClick={() => setState('landing')} className="text-slate-400 font-bold flex items-center gap-2 mx-auto hover:text-indigo-600 transition-colors"><ArrowRight className="rotate-180" size={16}/>{t.backBtn}</button>
+          <button onClick={async () => {
+                if (username && password) {
+                  localStorage.setItem('username', username);
+                  localStorage.setItem('password', password);
+                }
+                setState('landing');
+              }} className="text-slate-400 font-bold flex items-center gap-2 mx-auto hover:text-indigo-600 transition-colors"><ArrowRight className="rotate-180" size={16}/>{t.backBtn}</button>
           <h1 className="text-5xl font-serif font-bold text-slate-900">{t.intensityTitle}</h1>
           <p className="text-lg text-slate-500">{t.intensityDesc}</p>
           <div className="grid md:grid-cols-2 gap-8">
