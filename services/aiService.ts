@@ -2,7 +2,7 @@ import { Message, DiscoveryResult, DiscoveryMode, DiscoveryIntensity, AppSetting
 import { getPersonaInstruction } from "../personas";
 
 // 后端 API 地址
-const API_BASE = 'https://thinking.vinolab.tech';
+const API_BASE = 'http://localhost:3000';
 
 // 保存 sessionId
 let sessionId: string | null = null;
