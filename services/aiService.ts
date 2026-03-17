@@ -50,6 +50,8 @@ export const getNextQuestion = async (
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          username: localStorage.getItem('username'),
+          password: localStorage.getItem('password'),
           mode: mode,
           intensity: intensity,
           personaContext: instruction
@@ -79,6 +81,8 @@ export const getNextQuestion = async (
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+          username: localStorage.getItem('username'),
+          password: localStorage.getItem('password'),
         sessionId: sessionId,
         content: contentWithPersona
       })
@@ -106,7 +110,9 @@ export const generateFinalAnalysis = async (
     const response = await fetch(`${API_BASE}/api/chat/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId })
+      body: JSON.stringify({
+          username: localStorage.getItem('username'),
+          password: localStorage.getItem('password'), sessionId })
     });
 
     if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
