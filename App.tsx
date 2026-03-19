@@ -1,15 +1,18 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Message, DiscoveryResult, AppState, Language, DiscoveryMode, DiscoveryIntensity, AppSettings, ApiProvider } from './types';
-import { streamNextQuestion, generateFinalAnalysis, clearSession } from './services/aiService';
+import { streamJudgeResponse, streamPhilosopherResponse, generateFinalAnalysis, clearSession } from './services/aiService';
 import { ChatBubble } from './components/ChatBubble';
 import { ProgressBar } from './components/ProgressBar';
+import { PhilosopherIntro } from './components/PhilosopherIntro';
+import { HistorySidebar, saveToHistory } from './components/HistorySidebar';
+import { ChatSidebar } from './components/ChatSidebar';
 import { INITIAL_QUESTION_POOL } from './constants/questions';
 import { 
   Compass, Send, RefreshCw, Sparkles, ArrowRight, Quote, Languages, Scale, 
   ScrollText, FileImage, Layers, Zap, Dna, Target, Timer, Infinity as InfinityIcon, AlertCircle, Settings, X, Key,
   BrainCircuit, Fingerprint, Cpu, Network, MessageSquare, FlaskConical, Binary, Eye,
-  Dices, LayoutGrid, RotateCcw, User, Lock, Mail, Github, Menu
+  Dices, LayoutGrid, RotateCcw, User, Lock, Mail, Github, Menu, History, ChevronRight
 } from 'lucide-react';
 
 declare const html2canvas: any;
@@ -175,11 +178,19 @@ const App: React.FC = () => {
   
   // Settings & Lottery State
   const [showSettings, setShowSettings] = useState(false);
+  const [showPhilosopherIntro, setShowPhilosopherIntro] = useState(false);
   const [showAllModes, setShowAllModes] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [currentHistoryId, setCurrentHistoryId] = useState<string | undefined>();
   const [isSpinning, setIsSpinning] = useState(false);
   const [isSlotRevealed, setIsSlotRevealed] = useState(false); // New state to control slot machine visibility
   const [drawnMode, setDrawnMode] = useState<DiscoveryMode | null>(null);
   const slotRef = useRef<HTMLDivElement>(null);
+
+  // Two-phase dialogue state
+  const [dialoguePhase, setDialoguePhase] = useState<'judge' | 'philosopher' | 'waiting'>('waiting');
+  const [lastJudgeContent, setLastJudgeContent] = useState<string>('');
   
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('explorer_compass_settings');
@@ -209,7 +220,9 @@ const App: React.FC = () => {
     setCanFinishEarly(false);
     setDrawnMode(null);
     setIsSpinning(false);
-    setIsSlotRevealed(false); // Reset slot reveal state
+    setIsSlotRevealed(false);
+    setDialoguePhase('waiting');
+    setLastJudgeContent('');
   };
 
   const selectMode = (m: DiscoveryMode) => { setMode(m); setState('intensity_select'); setShowAllModes(false); };
@@ -257,6 +270,8 @@ const App: React.FC = () => {
 
   const startJourney = async (m: DiscoveryMode, i: DiscoveryIntensity) => {
     setIsLoading(true); setError(null);
+    setDialoguePhase('judge'); // 开始审判机阶段
+    
     try {
       const pool = INITIAL_QUESTION_POOL[m];
       const randomQ = pool[Math.floor(Math.random() * pool.length)];
@@ -264,17 +279,51 @@ const App: React.FC = () => {
       startContentRef.current = startContent;
       
       const turnId = `start-${Date.now()}`;
-      const stream = streamNextQuestion([{ id: 'start-signal', role: 'user', content: startContent, timestamp: Date.now() }], m, i, settings, lang);
+      const judgeMessageId = `${turnId}-0`; // 固定消息ID
       
-      for await (const { messages: parsedMessages } of stream) {
-        setMessages(parsedMessages.map((msg, idx) => ({
-          ...msg,
-          id: `${turnId}-${idx}`
-        })));
+      const stream = streamJudgeResponse([{ id: 'start-signal', role: 'user', content: startContent, timestamp: Date.now() }], m, i, settings, lang, 1);
+      
+      let judgeResponseContent = '';
+      let initialSuggestions: string[] = [];
+      let isFirstMessage = true;
+
+      for await (const { messages: parsedMessages, isDone, judgeContent } of stream) {
+        if (parsedMessages.length > 0) {
+          const msg = parsedMessages[0];
+          
+          if (isFirstMessage) {
+            // 首次添加消息
+            setMessages(prev => [...prev, { ...msg, id: judgeMessageId }]);
+            isFirstMessage = false;
+          } else {
+            // 更新现有消息的内容
+            setMessages(prev => prev.map(m => 
+              m.id === judgeMessageId ? { ...msg, id: judgeMessageId } : m
+            ));
+          }
+        }
+        
+        // 保存审判机内容用于哲学家阶段
+        if (judgeContent) {
+          setLastJudgeContent(judgeContent);
+          judgeResponseContent = judgeContent;
+        }
+        // 保存初始建议
+        if (parsedMessages[0]?.suggestions) {
+          initialSuggestions = parsedMessages[0].suggestions;
+        }
       }
       
       setQuestionCount(1);
-    } catch (e: any) { setError(e.message || t.errorQuota); }
+
+      // ===== 初始问题后不立即显示哲学家，等待用户第一轮回复 =====
+      // 对话进入等待阶段，等用户回答后再触发哲学家点评
+      setDialoguePhase('waiting');
+      setIsLoading(false);
+    } catch (e: any) { 
+      setError(e.message || t.errorQuota); 
+      setDialoguePhase('waiting');
+    }
     finally { setIsLoading(false); }
   };
 
@@ -282,43 +331,141 @@ const App: React.FC = () => {
     const textToSend = overrideInput || input;
     if (!textToSend.trim() || isLoading || !mode) return;
 
-    // Clear suggestions from the last message to hide chips
+    // 移除审判机消息的 suggestions（隐藏 chips）- 只移除审判机的，不要移除哲学家的
     setMessages(prev => {
-        const last = prev[prev.length - 1];
-        if (last && last.role === 'assistant') {
-            return [...prev.slice(0, -1), { ...last, suggestions: undefined }];
+      // 找到最后一个审判机消息，清除它的 suggestions
+      const msgs = [...prev];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        if (msgs[i].speaker === 'Judge' && msgs[i].suggestions) {
+          msgs[i] = { ...msgs[i], suggestions: undefined };
+          break;
         }
-        return prev;
+      }
+      return msgs;
     });
 
     const userMsg: Message = { id: `user-${Date.now()}`, role: 'user', content: textToSend, timestamp: Date.now() };
-    const historyWithSignal = [{ id: 's', role: 'user', content: startContentRef.current, timestamp: 0 }, ...messages, userMsg];
     
     setMessages(prev => [...prev, userMsg]);
     setInput(''); setIsLoading(true); setError(null);
     
+    console.log('=== 开始处理用户回答 ===');
+    console.log('用户回答:', textToSend);
+    
     try {
+      // ===== 第一阶段：审判机回复 =====
+      setDialoguePhase('judge');
+      
+      // 只提取用户和审判机的消息，忽略哲学家回复（减少上下文）
+      const relevantMessages = messages.filter(m => 
+        m.role === 'user' || m.speaker === 'Judge'
+      );
+      const historyWithSignal = [{ id: 's', role: 'user', content: startContentRef.current, timestamp: 0 }, ...relevantMessages, userMsg];
+      
+      console.log('历史消息数量:', historyWithSignal.length);
+      
       const turnId = `turn-${Date.now()}`;
-      const stream = streamNextQuestion(historyWithSignal as Message[], mode, intensity, settings, lang);
-      
       let finalIsDone = false;
-      for await (const { messages: parsedMessages, isDone } of stream) {
-        finalIsDone = isDone;
-        setMessages(prev => {
-          const filtered = prev.filter(m => !m.id.startsWith(turnId));
-          const newMessages = parsedMessages.map((msg, idx) => ({
-            ...msg,
-            id: `${turnId}-${idx}`
-          }));
-          return [...filtered, ...newMessages];
-        });
-      }
+      let judgeResponseContent = '';
+      let currentParsedMessages: Message[] = []; // 用于存储最新的消息
+      let judgeMessageId = ''; // 审判机消息ID，保持不变
+
+      // ===== 第一阶段：直接到哲学家点评（跳过审判机追问）=====
+      // 用户回答后，审判机不立即追问，而是让哲学家先点评
       
+      // ===== 第二阶段：哲学家回复 =====
+      setDialoguePhase('philosopher');
+      console.log('=== 开始哲学家回复阶段 ===');
+      
+      try {
+        // 获取哲学家回复
+        const philosopherStream = streamPhilosopherResponse(
+          textToSend,
+          lastJudgeContent || judgeResponseContent,
+          mode,
+          settings,
+          lang
+        );
+
+        // 逐个显示哲学家消息
+        for await (const { messages: newPhilosopherMessages } of philosopherStream) {
+          console.log('收到哲学家消息:', newPhilosopherMessages);
+          if (newPhilosopherMessages.length > 0) {
+            // 每条消息单独添加，带延迟
+            for (let i = 0; i < newPhilosopherMessages.length; i++) {
+              const msg = newPhilosopherMessages[i];
+              setMessages(prev => [...prev, { ...msg, id: `phil-${Date.now()}-${i}` }]);
+              
+              // 滚动到底部
+              setTimeout(() => {
+                if (scrollRef.current) {
+                  scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                }
+              }, 100);
+              
+              // 每条消息之间延迟
+              await new Promise(resolve => setTimeout(resolve, 1200));
+            }
+          }
+        }
+        
+        console.log('哲学家回复完成');
+      } catch (philError: any) {
+        console.error('哲学家回复错误:', philError);
+        setError(philError.message || '哲学家回复失败');
+      }
+
+      // ===== 第三阶段：审判机下一个新问题 =====
+      console.log('=== 开始审判机下一轮提问 ===');
+      setDialoguePhase('judge');
+      
+      // 更新历史，包含用户回答和哲学家回复（不包括审判机的上一个问题）
+      const fullHistory = messages.filter(m => 
+        m.role === 'user' || (m.speaker && m.speaker.startsWith('Persona:'))
+      );
+      fullHistory.push(userMsg);
+      
+      const nextTurnId = `next-${Date.now()}`;
+      let nextJudgeContent = '';
+      let nextParsedMessages: Message[] = [];
+      let nextJudgeMessageId = '';
+      
+      const nextJudgeStream = streamJudgeResponse(
+        [{ id: 's', role: 'user', content: '请提出一个新的哲学问题', timestamp: 0 }, ...fullHistory] as Message[],
+        mode, intensity, settings, lang, questionCount + 2
+      );
+      
+      for await (const { messages: parsedMessages, isDone, judgeContent } of nextJudgeStream) {
+        finalIsDone = isDone;
+        if (judgeContent) {
+          nextJudgeContent = judgeContent;
+          setLastJudgeContent(judgeContent);
+        }
+        nextParsedMessages = parsedMessages;
+        
+        if (!nextJudgeMessageId && parsedMessages.length > 0) {
+          nextJudgeMessageId = `${nextTurnId}-0`;
+          setMessages(prev => [...prev, { ...parsedMessages[0], id: nextJudgeMessageId }]);
+        } else if (parsedMessages.length > 0) {
+          setMessages(prev => prev.map(m => 
+            m.id === nextJudgeMessageId ? { ...parsedMessages[0], id: nextJudgeMessageId } : m
+          ));
+        }
+      }
+
+      // 更新审判机内容用于下一轮
+      judgeResponseContent = nextJudgeContent;
+      currentParsedMessages = nextParsedMessages;
+
       const reachedTarget = intensity === 'QUICK' ? questionCount >= QUICK_TARGET : questionCount >= DEEP_TARGET;
       if (finalIsDone || reachedTarget) setCanFinishEarly(true);
       
       setQuestionCount(prev => prev + 1);
-    } catch (e: any) { setError(e.message || t.errorQuota); }
+      setDialoguePhase('waiting');
+    } catch (e: any) { 
+      setError(e.message || t.errorQuota); 
+      setDialoguePhase('waiting');
+    }
     finally { setIsLoading(false); }
   };
 
@@ -382,22 +529,108 @@ const App: React.FC = () => {
     return descs[m] || "";
   }
 
-  // Helper to render suggestion chips
+  // Helper to render suggestion chips - 升级版
   const renderSuggestions = () => {
-    const lastMsg = messages[messages.length - 1];
-    if (!lastMsg || lastMsg.role !== 'assistant' || !lastMsg.suggestions || lastMsg.suggestions.length === 0) return null;
+    // 找到最后一条审判机的消息，显示其 Suggestions
+    const lastJudgeMsg = [...messages].reverse().find(m => m.speaker === 'Judge' && m.suggestions && m.suggestions.length > 0);
+    if (!lastJudgeMsg || !lastJudgeMsg.suggestions || lastJudgeMsg.suggestions.length === 0) return null;
 
     return (
-      <div className="flex flex-wrap gap-2 mb-4 animate-in slide-in-from-bottom-2 fade-in duration-500">
-        {lastMsg.suggestions.map((s, i) => (
-          <button 
-            key={i} 
-            onClick={() => handleSend(parseBilingual(s))}
-            className="px-4 py-2 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full text-sm font-medium hover:bg-indigo-100 hover:scale-105 transition-all shadow-sm"
-          >
-            {parseBilingual(s)}
-          </button>
-        ))}
+      <div className="flex flex-wrap gap-3 mb-4 animate-in slide-in-from-bottom-3 fade-in duration-300">
+        {lastJudgeMsg.suggestions.map((s, i) => {
+          const text = parseBilingual(s);
+          return (
+            <button 
+              key={i} 
+              // 点击后放入输入框，让用户修改后发送
+              onClick={() => setInput(text)}
+              className="
+                px-5 py-3 rounded-2xl text-sm font-medium transition-all duration-200 
+                hover:scale-105 active:scale-95 shadow-sm hover:shadow-md
+                bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-indigo-50
+                flex items-center gap-2
+              "
+              style={{ animationDelay: `${i * 50}ms` }}
+            >
+              <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs">
+                {i + 1}
+              </span>
+              {text}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // 加载动画 - 更有趣的等待文案
+  const renderLoading = () => {
+    if (!isLoading) return null;
+
+    if (dialoguePhase === 'judge') {
+      const messages = [
+        '审判机正在称量你的回答...',
+        '在善恶的天平上校准...',
+        '寻找你逻辑中的漏洞...',
+        '编织下一个思想困境...',
+        '审判你的哲学立场...',
+      ];
+      const msg = messages[Math.floor(Date.now() / 3000) % messages.length];
+      
+      return (
+        <div className="flex items-center justify-center gap-4 py-5 px-5 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-2xl border border-amber-200 shadow-md mb-4 animate-in fade-in slide-in-from-bottom-2">
+          <div className="relative">
+            <Scale className="text-amber-600" size={28} />
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full animate-ping"></div>
+          </div>
+          <div className="flex-1">
+            <span className="text-amber-800 font-bold text-sm">⚖️ 审判机</span>
+            <p className="text-amber-700 text-sm mt-0.5">{msg}</p>
+          </div>
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => (
+              <span key={i} className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }}></span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (dialoguePhase === 'philosopher') {
+      const messages = [
+        '西西弗斯正在推石头...',
+        '尼采正在审视你的灵魂...',
+        '康德在思考你的答案...',
+        '萨特在说：存在先于本质...',
+        '庄子梦中变为蝴蝶...',
+        '第欧根尼寻找真小人...',
+        '苏格拉底在追问...',
+        '德尔斐：认识你自己...',
+      ];
+      const msg = messages[Math.floor(Date.now() / 2500) % messages.length];
+      
+      return (
+        <div className="flex items-center justify-center gap-4 py-5 px-5 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl border border-purple-200 shadow-md mb-4 animate-in fade-in slide-in-from-bottom-2">
+          <div className="relative">
+            <BrainCircuit className="text-purple-600" size={28} />
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full animate-pulse"></div>
+          </div>
+          <div className="flex-1">
+            <span className="text-purple-800 font-bold text-sm">🧠 哲学家</span>
+            <p className="text-purple-700 text-sm mt-0.5">{msg}</p>
+          </div>
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => (
+              <span key={i} className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }}></span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex justify-center py-8">
+        <Dna className="animate-spin text-indigo-400" size={32} />
       </div>
     );
   };
@@ -475,15 +708,22 @@ const App: React.FC = () => {
   if (state === 'landing') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
-        {/* Header Options */}
-        <div className="absolute top-8 right-8 z-50">
-          <button 
-            onClick={() => setShowSettings(true)} 
-            className="p-4 bg-white shadow-sm rounded-full text-slate-600 border border-slate-100 hover:shadow-md transition-all hover:scale-105 active:scale-95 hover:text-indigo-600"
-          >
-            <Settings size={24} />
-          </button>
-        </div>
+        {/* 统一侧边栏 */}
+        <ChatSidebar 
+          language={lang}
+          isOpen={showSidebar}
+          onOpen={() => setShowSidebar(!showSidebar)}
+          mode={null}
+          modeLabel=""
+          intensity=""
+          questionCount={0}
+          currentHistoryId={undefined}
+          onStartNew={() => {}}
+          onOpenSettings={() => setShowSettings(true)}
+          onOpenPhilosopherIntro={() => setShowPhilosopherIntro(true)}
+          onReset={() => {}}
+          onChangeLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
+        />
 
         {/* View All Overlay */}
         {showAllModes && (
@@ -534,13 +774,22 @@ const App: React.FC = () => {
                     <button onClick={() => saveSettings(settings)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-lg hover:bg-black transition-all">
                       {t.saveBtn}
                     </button>
-                    <button 
-                      onClick={() => { setShowSettings(false); setShowAllModes(true); }} 
-                      className="w-full py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-                    >
-                      <LayoutGrid size={18} />
-                      {t.viewAll}
-                    </button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={() => { setShowSettings(false); setShowAllModes(true); }} 
+                        className="py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                      >
+                        <LayoutGrid size={16} />
+                        {t.viewAll}
+                      </button>
+                      <button 
+                        onClick={() => { setShowSettings(false); setShowPhilosopherIntro(true); }} 
+                        className="py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Sparkles size={16} />
+                        {lang === 'zh' ? '哲学家' : 'Philosophers'}
+                      </button>
+                    </div>
                 </div>
               </div>
             </div>
@@ -685,9 +934,18 @@ const App: React.FC = () => {
           <div ref={reportContainerRef} className="bg-white p-12 md:p-24 rounded-[4rem] shadow-2xl space-y-40 flex flex-col items-center export-container relative overflow-hidden">
             <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-50 rounded-full blur-[100px] -mr-48 -mt-48 opacity-50"></div>
             
-            <div className="text-center space-y-10 w-full max-w-2xl py-10 relative z-10">
+            {/* 1. 名言/motto 放在最前面 */}
+            <div className="w-full max-w-2xl py-8 text-center">
+               <div className="p-12 md:p-16 bg-gradient-to-br from-slate-800 to-slate-900 rounded-[3rem] text-white space-y-6 relative overflow-hidden shadow-2xl">
+                  <Quote className="absolute top-8 left-8 text-white/10" size={80} />
+                  <h3 className="text-2xl md:text-3xl font-serif italic leading-relaxed text-indigo-100">"{parseBilingual(result.motto)}"</h3>
+               </div>
+            </div>
+
+            {/* 2. 标题 + 哲学倾向 */}
+            <div className="text-center space-y-8 w-full max-w-2xl py-8 relative z-10">
               <div className="inline-flex items-center gap-3 px-6 py-2 bg-slate-900 text-white rounded-full text-[11px] tracking-[0.4em] font-bold uppercase"><Zap size={14} className="text-indigo-400" /> {t.resultTitle}</div>
-              <h1 className="text-5xl md:text-7xl font-serif font-bold text-slate-900 leading-[1.15]">{parseBilingual(result.title)}</h1>
+              <h1 className="text-4xl md:text-6xl font-serif font-bold text-slate-900 leading-[1.15]">{parseBilingual(result.title)}</h1>
               {result.philosophicalTrend && (
                 <div className="inline-flex items-center gap-3 px-8 py-3 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-[2rem] shadow-sm">
                   <BrainCircuit size={20} />
@@ -696,38 +954,23 @@ const App: React.FC = () => {
               )}
             </div>
 
-            <div className="w-full max-w-3xl py-10 space-y-12 relative z-10">
-              <div className="text-indigo-400 font-black tracking-[0.4em] text-[10px] uppercase text-center">核心剖析 / Essence</div>
-              <div className="space-y-12 px-10 border-l-4 border-indigo-500/10">
-                <p className="text-4xl md:text-5xl font-bold text-slate-900 leading-tight font-serif italic">
-                  {heroSentence}
-                </p>
-                <div className="space-y-8">
-                  {deepAnalysis.map((para, i) => (
-                    <p key={i} className="text-xl md:text-2xl text-slate-600 leading-[1.8] font-heiti opacity-90">
-                      {para}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="w-full max-w-2xl py-16 space-y-14 bg-slate-50 p-16 rounded-[4rem] border border-slate-100 shadow-inner">
+            {/* 3. 真我能量矩阵 (Dimensions) */}
+            <div className="w-full max-w-2xl py-10 space-y-10 bg-slate-50 px-10 py-12 rounded-[3rem] border border-slate-100 shadow-inner">
               <div className="text-center space-y-3">
                 <h3 className="text-[10px] font-black text-slate-400 tracking-[0.4em] uppercase">{t.dimensionTitle}</h3>
                 <div className="w-12 h-0.5 bg-indigo-200 mx-auto"></div>
               </div>
-              <div className="space-y-12">
+              <div className="space-y-8">
                 {result.dimensions?.map((dim, i) => {
                   const rawVal = dim.value;
                   const displayValue = (rawVal > 0 && rawVal <= 1) ? Math.round(rawVal * 100) : Math.round(rawVal);
                   return (
-                    <div key={i} className="space-y-4">
-                      <div className="flex justify-between font-heiti font-bold text-lg">
+                    <div key={i} className="space-y-3">
+                      <div className="flex justify-between font-heiti font-bold text-base">
                         <span className="text-slate-600">{parseBilingual(dim.label)}</span>
-                        <span className="text-indigo-600 font-serif italic text-2xl">{displayValue}%</span>
+                        <span className="text-indigo-600 font-serif italic text-xl">{displayValue}%</span>
                       </div>
-                      <div className="h-4 bg-white/80 border border-indigo-50 rounded-full overflow-hidden p-1 shadow-sm">
+                      <div className="h-3 bg-white/80 border border-indigo-50 rounded-full overflow-hidden p-0.5 shadow-sm">
                         <div 
                           className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-1000 ease-out" 
                           style={{width:`${displayValue}%`}}
@@ -739,37 +982,50 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <div className="w-full max-w-3xl py-10 space-y-16">
+            {/* 4. 深度洞察 (Insights) */}
+            <div className="w-full max-w-3xl py-10 space-y-12">
               <h3 className="text-center text-[10px] font-black text-blue-500 tracking-[0.4em] uppercase">深度洞察 / Insights</h3>
-              <div className="grid md:grid-cols-2 gap-10">
+              <div className="grid md:grid-cols-2 gap-8">
                 {result.keyInsights.map((ins, i) => (
-                  <div key={i} className="p-10 bg-white border border-slate-50 rounded-[3rem] shadow-sm hover:shadow-xl transition-all flex flex-col gap-6 group">
-                    <div className="w-10 h-10 bg-blue-50 text-blue-400 rounded-2xl flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-all"><Target size={20}/></div>
-                    <p className="text-xl text-slate-700 leading-relaxed font-heiti">{parseBilingual(ins)}</p>
+                  <div key={i} className="p-8 bg-white border border-slate-50 rounded-[2rem] shadow-sm hover:shadow-lg transition-all flex flex-col gap-4 group">
+                    <div className="w-8 h-8 bg-blue-50 text-blue-400 rounded-xl flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-all"><Target size={16}/></div>
+                    <p className="text-lg text-slate-700 leading-relaxed font-heiti">{parseBilingual(ins)}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="w-full max-w-3xl py-10 space-y-16">
+            {/* 5. 进化路径 (Evolution) */}
+            <div className="w-full max-w-3xl py-10 space-y-10">
               <h3 className="text-center text-[10px] font-black text-teal-500 tracking-[0.4em] uppercase">进化路径 / Evolution</h3>
-              <div className="space-y-8">
+              <div className="space-y-6">
                 {result.suggestedPaths.map((p, i) => (
-                  <div key={i} className="p-12 bg-teal-50/20 rounded-[3.5rem] flex items-center gap-10 border border-teal-50 hover:bg-white hover:shadow-xl transition-all group">
-                    <div className="w-16 h-16 bg-teal-600 text-white rounded-2xl flex items-center justify-center font-black text-3xl shadow-lg shadow-teal-100 group-hover:rotate-12 transition-transform">{i+1}</div>
-                    <p className="text-2xl text-slate-800 font-heiti leading-relaxed">{parseBilingual(p)}</p>
+                  <div key={i} className="p-8 bg-teal-50/30 rounded-[2rem] flex items-center gap-6 border border-teal-50 hover:bg-white hover:shadow-lg transition-all group">
+                    <div className="w-12 h-12 bg-teal-600 text-white rounded-xl flex items-center justify-center font-black text-xl shadow-lg group-hover:scale-110 transition-transform">{i+1}</div>
+                    <p className="text-lg text-slate-800 font-heiti leading-relaxed">{parseBilingual(p)}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="w-full max-w-2xl py-20 text-center">
-               <div className="p-20 md:p-32 bg-slate-900 rounded-[5rem] text-white space-y-10 relative overflow-hidden shadow-2xl">
-                  <Quote className="absolute top-12 left-12 text-white/5" size={120} />
-                  <h3 className="text-4xl md:text-5xl font-serif italic leading-[1.6] text-indigo-50">"{parseBilingual(result.motto)}"</h3>
-               </div>
+            {/* 6. 核心剖析 (Essence) - 放最后 */}
+            <div className="w-full max-w-3xl py-10 space-y-10 relative z-10">
+              <div className="text-indigo-400 font-black tracking-[0.4em] text-[10px] uppercase text-center">核心剖析 / Essence</div>
+              <div className="space-y-10 px-8 border-l-4 border-indigo-500/10">
+                <p className="text-3xl md:text-4xl font-bold text-slate-900 leading-tight font-serif italic">
+                  {heroSentence}
+                </p>
+                <div className="space-y-6">
+                  {deepAnalysis.map((para, i) => (
+                    <p key={i} className="text-lg md:text-xl text-slate-600 leading-[1.8] font-heiti opacity-90">
+                      {para}
+                    </p>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="pt-20 border-t border-slate-100 text-slate-300 text-[10px] tracking-[0.6em] font-black uppercase">EXPLORER'S COMPASS • AI SOUL NAVIGATOR • {new Date().toLocaleDateString()}</div>
+
+            <div className="pt-10 border-t border-slate-100 text-slate-300 text-[10px] tracking-[0.6em] font-black uppercase">EXPLORER'S COMPASS • AI SOUL NAVIGATOR • {new Date().toLocaleDateString()}</div>
           </div>
         </div>
         <div style={{display:'none'}}><div ref={chatContainerRef} className="bg-white p-24 w-[1000px] flex flex-col gap-10 export-container">
@@ -780,52 +1036,86 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-white">
-      <header className="px-8 py-6 flex items-center justify-between border-b sticky top-0 bg-white/80 backdrop-blur-xl z-40">
-        <div className="flex items-center gap-5">
-          <button onClick={() => {if(window.confirm(t.backBtn)) reset()}} className="p-4 bg-slate-900 text-white rounded-[1.25rem] shadow-xl hover:scale-105 transition-transform"><Compass size={24}/></button>
-          <div>
-            <h1 className="font-serif font-bold text-2xl text-slate-900">{t.title}</h1>
-            <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest">{getModeLabel(mode)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-8">
-          <div className="hidden md:block w-48"><ProgressBar current={questionCount} total={intensity==='QUICK'?QUICK_TARGET:DEEP_TARGET}/></div>
-          <button onClick={() => setLang(l => l==='zh'?'en':'zh')} className="p-3 text-slate-400 hover:text-indigo-600 transition-colors bg-slate-50 rounded-full"><Languages size={24}/></button>
-        </div>
-      </header>
+    <div className="flex flex-col h-screen bg-slate-50">
+      {/* 聊天页面侧边栏 */}
+      <ChatSidebar 
+        language={lang}
+        isOpen={showSidebar}
+        onOpen={() => setShowSidebar(!showSidebar)}
+        mode={mode}
+        modeLabel={getModeLabel(mode)}
+        intensity={intensity}
+        questionCount={questionCount}
+        currentHistoryId={currentHistoryId}
+        onStartNew={() => { /* 开始新对话 */ }}
+        onOpenSettings={() => setShowSettings(true)}
+        onOpenPhilosopherIntro={() => setShowPhilosopherIntro(true)}
+        onReset={reset}
+        onChangeLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
+      />
 
-      <main ref={scrollRef} className="flex-1 overflow-y-auto pt-16 pb-40">
-        <div className="max-w-4xl mx-auto px-6">
+      {/* 聊天内容区 */}
+      <main ref={scrollRef} className="flex-1 overflow-y-auto pb-48">
+        <div className="max-w-3xl mx-auto px-4">
           {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} onTyping={handleTyping} />)}
-          {error && <div className="p-12 bg-red-50 rounded-[3rem] text-center space-y-6 max-w-xl mx-auto border border-red-100">
-            <div className="flex items-center justify-center gap-3 text-red-500 font-bold text-xl"><AlertCircle size={28}/>{error}</div>
-            <button onClick={() => handleSend()} className="px-10 py-4 bg-red-500 text-white rounded-2xl font-bold flex items-center gap-3 mx-auto"><RefreshCw size={20}/>{t.retryBtn}</button>
+          {error && <div className="p-8 bg-red-50 rounded-2xl text-center space-y-4 max-w-md mx-auto border border-red-100">
+            <div className="flex items-center justify-center gap-2 text-red-500 font-medium"><AlertCircle size={20}/>{error}</div>
+            <button onClick={() => handleSend()} className="px-8 py-3 bg-red-500 text-white rounded-xl font-medium flex items-center gap-2 mx-auto"><RefreshCw size={16}/>{t.retryBtn}</button>
           </div>}
-          {isLoading && <div className="flex justify-center p-12 opacity-30"><Dna className="animate-spin text-indigo-500" size={40}/></div>}
+          {renderLoading()}
         </div>
       </main>
 
-      <footer className="p-8 border-t bg-white sticky bottom-0 shadow-2xl z-30">
-        <div className="max-w-4xl mx-auto space-y-4">
+      {/* 底部输入区 */}
+      <footer className="p-4 bg-white border-t sticky bottom-0 shadow-lg z-30">
+        <div className="max-w-3xl mx-auto space-y-3">
           {renderSuggestions()}
-          <div className="relative flex gap-4">
+          <div className="relative flex gap-3">
             <textarea 
               value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter' && !e.shiftKey){e.preventDefault();handleSend();}}} 
-              placeholder={t.inputPlaceholder} rows={2} disabled={!!error || isLoading} 
-              className="flex-1 p-8 bg-slate-50 rounded-[2rem] border-2 border-transparent focus:border-indigo-100 focus:bg-white outline-none text-2xl font-heiti resize-none transition-all disabled:opacity-50 shadow-inner" 
+              placeholder={t.inputPlaceholder} rows={1} disabled={!!error || isLoading} 
+              className="flex-1 px-5 py-3 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-indigo-200 focus:bg-white outline-none text-base resize-none transition-all disabled:opacity-50" 
             />
-            <button onClick={() => handleSend()} disabled={!input.trim() || isLoading || !!error} className="absolute right-4 bottom-4 p-6 bg-slate-900 text-white rounded-[1.5rem] hover:bg-black active:scale-90 transition-all disabled:opacity-20 shadow-2xl">
-              <Send size={28}/>
+            <button onClick={() => handleSend()} disabled={!input.trim() || isLoading || !!error} className="px-5 py-3 bg-gradient-to-br from-slate-800 to-slate-700 text-white rounded-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-30 shadow-lg">
+              <Send size={20}/>
             </button>
           </div>
-          {canFinishEarly && !error && (
-            <button onClick={analyze} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-bold flex items-center justify-center gap-4 shadow-2xl hover:bg-indigo-700 transition-all text-xl tracking-[0.1em]">
-              <Sparkles size={24}/>{t.finishBtn}
+          {/* 生成报告按钮 - 用户回答后 或 无上限模式10题后随时出现 */}
+          {(canFinishEarly || (intensity === 'DEEP' && questionCount >= 10)) && !error && (
+            <button onClick={analyze} className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
+              <Sparkles size={20}/>{t.finishBtn}
             </button>
           )}
         </div>
       </footer>
+
+      {/* 哲学家介绍弹窗 */}
+      {showPhilosopherIntro && (
+        <PhilosopherIntro language={lang} onClose={() => setShowPhilosopherIntro(false)} />
+      )}
+
+      {/* 历史记录侧边栏 */}
+      <HistorySidebar 
+        language={lang} 
+        isOpen={showHistory} 
+        onClose={() => setShowHistory(false)}
+        onLoadHistory={(history) => {
+          // 加载历史记录的逻辑
+          console.log('Load history:', history);
+          setShowHistory(false);
+        }}
+        currentHistoryId={currentHistoryId}
+      />
+
+      {/* 主页侧边栏 */}
+      <LandingSidebar 
+        language={lang}
+        isOpen={showLandingSidebar}
+        onOpen={() => setShowLandingSidebar(!showLandingSidebar)}
+        onOpenSettings={() => setShowSettings(true)}
+        onOpenPhilosopherIntro={() => setShowPhilosopherIntro(true)}
+        onOpenHistory={() => setShowHistory(true)}
+      />
     </div>
   );
 };
