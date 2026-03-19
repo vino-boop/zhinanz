@@ -5,12 +5,6 @@ import { streamJudgeResponse, streamPhilosopherResponse, generateFinalAnalysis, 
 import { ChatBubble } from './components/ChatBubble';
 import { ProgressBar } from './components/ProgressBar';
 import { INITIAL_QUESTION_POOL } from './constants/questions';
-// 导入新的加载状态组件
-import { LoadingStateCompact, useLoadingState, LoadingState } from './components/LoadingStates';
-// 导入 JOJO 风格报告页
-import { AnalyzingPage } from './components/JoJoStandCard';
-// 导入角色主题
-import { JUDGE_THEME, PHILOSOPHER_THEME, getPhilosopherTheme, USER_THEME } from './components/CharacterThemes';
 import { 
   Compass, Send, RefreshCw, Sparkles, ArrowRight, Quote, Languages, Scale, 
   ScrollText, FileImage, Layers, Zap, Dna, Target, Timer, Infinity as InfinityIcon, AlertCircle, Settings, X, Key,
@@ -179,17 +173,6 @@ const App: React.FC = () => {
   const [canFinishEarly, setCanFinishEarly] = useState(false);
   const startContentRef = useRef<string>('START');
   
-  // 加载状态管理（新增）
-  const { 
-    currentState, 
-    isActive: loadingStateActive,
-    setJudgePhase, 
-    setPhilosopherPhase, 
-    setAnalyzing, 
-    setSlotSpinning,
-    endLoading 
-  } = useLoadingState();
-  
   // Settings & Lottery State
   const [showSettings, setShowSettings] = useState(false);
   const [showAllModes, setShowAllModes] = useState(false);
@@ -281,7 +264,6 @@ const App: React.FC = () => {
   const startJourney = async (m: DiscoveryMode, i: DiscoveryIntensity) => {
     setIsLoading(true); setError(null);
     setDialoguePhase('judge'); // 开始审判机阶段
-    setJudgePhase('constructing'); // 审判机构建中
     
     try {
       const pool = INITIAL_QUESTION_POOL[m];
@@ -330,12 +312,10 @@ const App: React.FC = () => {
       // ===== 初始问题后不立即显示哲学家，等待用户第一轮回复 =====
       // 对话进入等待阶段，等用户回答后再触发哲学家点评
       setDialoguePhase('waiting');
-      endLoading();
       setIsLoading(false);
     } catch (e: any) { 
       setError(e.message || t.errorQuota); 
       setDialoguePhase('waiting');
-      endLoading();
     }
     finally { setIsLoading(false); }
   };
@@ -368,7 +348,6 @@ const App: React.FC = () => {
     try {
       // ===== 第一阶段：审判机回复 =====
       setDialoguePhase('judge');
-      setJudgePhase('evaluating'); // 审判机评估中
       
       // 只提取用户和审判机的消息，忽略哲学家回复（减少上下文）
       const relevantMessages = messages.filter(m => 
@@ -389,7 +368,6 @@ const App: React.FC = () => {
       
       // ===== 第二阶段：哲学家回复 =====
       setDialoguePhase('philosopher');
-      setPhilosopherPhase('meditating'); // 哲学家沉思中
       console.log('=== 开始哲学家回复阶段 ===');
       
       try {
@@ -433,7 +411,6 @@ const App: React.FC = () => {
       // ===== 第三阶段：审判机下一个新问题 =====
       console.log('=== 开始审判机下一轮提问 ===');
       setDialoguePhase('judge');
-      setJudgePhase('constructing'); // 审判机构建新问题
       
       // 更新历史，包含用户回答和哲学家回复（不包括审判机的上一个问题）
       const fullHistory = messages.filter(m => 
@@ -478,11 +455,9 @@ const App: React.FC = () => {
       
       setQuestionCount(prev => prev + 1);
       setDialoguePhase('waiting');
-      endLoading(); // 结束加载状态
     } catch (e: any) { 
       setError(e.message || t.errorQuota); 
       setDialoguePhase('waiting');
-      endLoading();
     }
     finally { setIsLoading(false); }
   };
@@ -490,16 +465,13 @@ const App: React.FC = () => {
   const analyze = async () => {
     if (!mode) return;
     setState('analyzing'); setIsLoading(true);
-    setAnalyzing(); // 分析中加载状态
     try {
       const res = await generateFinalAnalysis([{ id: 's', role: 'user', content: 'START', timestamp: 0 }, ...messages], mode, settings);
       setResult(res); setState('result');
-      endLoading();
     } catch (e: any) { 
       console.error(e);
       setError(e.message || "Analysis Failed"); 
       setState('chatting'); 
-      endLoading();
     }
     finally { setIsLoading(false); }
   };
@@ -588,10 +560,55 @@ const App: React.FC = () => {
     );
   };
 
-  // 替换为新的沉浸式加载状态组件
+  // 加载动画
   const renderLoading = () => {
-    if (!isLoading || !loadingStateActive) return null;
-    return <LoadingStateCompact type={currentState} language={lang} />;
+    if (!isLoading) return null;
+
+    if (dialoguePhase === 'judge') {
+      return (
+        <div className="flex items-center justify-center gap-4 py-6 px-6 bg-gradient-to-r from-[#f5f0e6] to-[#ebe4d4] rounded-2xl border border-slate-200/60 shadow-md mb-4">
+          <div className="relative">
+            <Scale className="text-slate-600" size={28} />
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full animate-pulse"></div>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-slate-700 font-serif font-medium">审判机正在思考...</span>
+            <span className="text-xs text-slate-400">构建思想实验</span>
+          </div>
+          <div className="flex gap-1 ml-2">
+            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+          </div>
+        </div>
+      );
+    }
+
+    if (dialoguePhase === 'philosopher') {
+      return (
+        <div className="flex items-center justify-center gap-4 py-6 px-6 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-2xl border border-amber-100 shadow-md mb-4">
+          <div className="relative">
+            <BrainCircuit className="text-amber-600" size={28} />
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full animate-ping"></div>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-amber-800 font-serif font-medium">哲学家正在回应...</span>
+            <span className="text-xs text-amber-500">引经据典中</span>
+          </div>
+          <div className="flex gap-1 ml-2">
+            <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+            <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+            <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex justify-center py-8">
+        <Dna className="animate-spin text-indigo-400" size={32} />
+      </div>
+    );
   };
 
   const handleTyping = useCallback(() => {
@@ -845,8 +862,16 @@ const App: React.FC = () => {
   }
 
   if (state === 'analyzing') {
-    // JOJO 风格替身觉醒页面
-    return <AnalyzingPage language={lang} />;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-10">
+        <Dna size={80} className="text-indigo-400 animate-pulse mb-8" />
+        <h2 className="text-4xl font-serif mb-4 text-center">{t.analyzingTitle}</h2>
+        <p className="text-slate-400 italic text-center max-w-md">{t.analyzingDesc}</p>
+        <div className="mt-12 w-64 h-1 bg-white/10 rounded-full overflow-hidden">
+          <div className="h-full bg-indigo-500 animate-[loading_2s_infinite]"></div>
+        </div>
+      </div>
+    );
   }
 
   if (state === 'result' && result) {
