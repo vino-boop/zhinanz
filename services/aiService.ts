@@ -1,0 +1,517 @@
+import { Message, DiscoveryResult, DiscoveryMode, DiscoveryIntensity, AppSettings } from "../types";
+import { getJudgeInstruction, getPhilosopherInstruction } from "../personas";
+import { matchPersonas } from "../personaKeywords";
+
+const DEEPSEEK_API_KEY = 'sk-8d1043af8f8c48edb1c80048b7f75690';
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+
+// 保存 sessionId (为了兼容现有接口，虽然直连不需要)
+let sessionId: string | null = null;
+
+export const setSessionId = (id: string) => {
+  sessionId = id;
+};
+
+export const getSessionId = () => sessionId;
+
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function callWithRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let lastError: any;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      const errorStr = String(error);
+      if (errorStr.includes('429') || errorStr.includes('RESOURCE_EXHAUSTED')) {
+        const backoffTime = Math.pow(2, i) * 1000 + Math.random() * 1000;
+        await wait(backoffTime);
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
+// ============================================================
+// 第一阶段：审判机回复 + 提出新问题
+// ============================================================
+export const streamJudgeResponse = async function* (
+  history: Message[],
+  mode: DiscoveryMode,
+  intensity: DiscoveryIntensity,
+  settings: AppSettings,
+  lang: string = 'zh',
+  questionCount: number = 0
+): AsyncGenerator<{ messages: Message[], isDone: boolean, judgeContent?: string }> {
+  const judgeInstruction = getJudgeInstruction(mode, lang, questionCount);
+  const isZh = lang === 'zh';
+  
+  // 检测是否是初始问题（包含 START）
+  const isInitialQuestion = history.some(m => m.content && m.content.startsWith('START'));
+
+  // 根据问题类型选择不同的 prompt
+  const connectionInstruction = isInitialQuestion 
+    ? (isZh 
+        ? "这是第一个问题，直接提出问题即可，不需要解释为什么要问。" 
+        : "This is the first question. Just ask the question directly, no need to explain why you're asking.")
+    : "";
+
+  const systemPrompt = isZh
+    ? `你是一个哲学探索助手，负责主持"多方会审"模式的哲学讨论。
+当前模式：${mode}
+当前强度：${intensity === 'QUICK' ? '快速探索（8轮左右）' : '深度探索（无上限）'}
+
+${connectionInstruction}
+
+${judgeInstruction}
+
+要求：
+1. 你是审判机，负责提出思想实验和道德困境
+2. 问题要具体、有场景、有冲击力
+3. 绝对不要问抽象的理论问题
+4. 在回复最后添加 [Suggestions] 标签
+5. 如果用户回答得足够深入，添加 [DONE] 标记表示结束`
+    : `You are a philosophical exploration assistant, hosting a "Multi-Party Trial" discussion.
+Current Mode: ${mode}
+Current Intensity: ${intensity === 'QUICK' ? 'Quick (~8 rounds)' : 'Deep (unlimited)'}
+
+${connectionInstruction}
+
+${judgeInstruction}
+
+Requirements:
+1. You are the Judge, presenting thought experiments and moral dilemmas
+2. Questions should be concrete, scenario-based, impactful
+3. NEVER ask abstract theoretical questions
+4. Add [Suggestions] tag at the end
+5. Add [DONE] if the user has answered deeply enough`;
+
+  const messages: any[] = [
+    { role: 'system', content: systemPrompt }
+  ];
+
+  // 构建对话历史
+  let initialQuestion = '';
+  let initialSuggestions = '';
+  let hasStart = false;
+
+  for (const msg of history) {
+    if (msg.content.startsWith('START')) {
+      hasStart = true;
+      if (msg.content.includes(':')) {
+        const parts = msg.content.substring(msg.content.indexOf(':') + 1).split('|SUGGESTIONS:');
+        initialQuestion = parts[0];
+        if (parts.length > 1) {
+          initialSuggestions = parts[1];
+        }
+      }
+
+      // 初始问题的处理
+      if (isZh) {
+        messages.push({
+          role: 'user',
+          content: `开始探索。请直接输出审判机的初始问题，带入具体场景。不要输出任何标签前缀。\n\n初始问题：${initialQuestion}${initialSuggestions ? `\n\n建议选项：${initialSuggestions}` : ''}`
+        });
+      } else {
+        messages.push({
+          role: 'user',
+          content: `Start exploration. Output the Judge's initial question directly with a concrete scenario. Do not output any tag prefix.\n\nInitial Question: ${initialQuestion}${initialSuggestions ? `\n\nSuggested options: ${initialSuggestions}` : ''}`
+        });
+      }
+      continue;
+    }
+
+    // 用户的回答
+    messages.push({
+      role: msg.role === 'assistant' ? 'assistant' : 'user',
+      content: msg.content
+    });
+  }
+
+  if (!hasStart && messages.length === 1) {
+    messages.push({
+      role: 'user',
+      content: isZh ? `开始探索` : `Start exploration`
+    });
+  }
+
+  if (!sessionId) {
+    sessionId = Date.now().toString();
+  }
+
+  // 调用 API
+  const response = await fetch(DEEPSEEK_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: messages,
+      stream: true,
+      temperature: 0.7
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API Error: ${response.status} - ${errorText}`);
+  }
+
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+  let fullText = '';
+
+  const parseStreamedText = (text: string): Message[] => {
+    const parsedMessages: Message[] = [];
+    
+    // 检查是否有 Suggestions
+    const suggestionsMatch = text.match(/\[Suggestions\]([\s\S]*)/i);
+    let suggestions: string[] = [];
+    let mainContent = text;
+
+    if (suggestionsMatch) {
+      mainContent = text.substring(0, suggestionsMatch.index).trim();
+      const suggestionsText = suggestionsMatch[1];
+      suggestions = suggestionsText
+        .split('\n')
+        .map(s => s.trim().replace(/^[-*0-9.]+\s*/, ''))
+        .filter(s => s.length > 0);
+    }
+
+    if (mainContent.trim()) {
+      parsedMessages.push({
+        id: '',
+        role: 'assistant',
+        speaker: 'Judge',
+        content: mainContent.trim().replace('[DONE]', ''),
+        timestamp: Date.now(),
+        suggestions: suggestions.length > 0 ? suggestions : undefined
+      });
+    }
+
+    return parsedMessages;
+  };
+
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+          try {
+            const data = JSON.parse(line.slice(6));
+            const delta = data.choices[0].delta.content || '';
+            
+            // Typewriter effect
+            for (let i = 0; i < delta.length; i++) {
+              fullText += delta[i];
+              const parsedMessages = parseStreamedText(fullText);
+              const isDone = fullText.includes('[DONE]');
+              const judgeContent = parsedMessages.length > 0 ? parsedMessages[0].content : '';
+              yield { messages: parsedMessages, isDone, judgeContent };
+              await new Promise(resolve => setTimeout(resolve, 15));
+            }
+          } catch (e) {
+            // ignore parse errors
+          }
+        }
+      }
+    }
+  }
+};
+
+// ============================================================
+// 第二阶段：根据关键词匹配哲学家，获取哲学家回复
+// 特点：对用户回答进行赞同/反对/质疑/补充等点评
+// ============================================================
+export const streamPhilosopherResponse = async function* (
+  userAnswer: string,
+  judgeResponse: string,
+  mode: DiscoveryMode,
+  settings: AppSettings,
+  lang: string = 'zh'
+): AsyncGenerator<{ messages: Message[], isDone: boolean }> {
+  // 关键词匹配哲学家
+  const matchedPersonas = matchPersonas(userAnswer, mode);
+  const philosopherInstruction = getPhilosopherInstruction(
+    matchedPersonas,
+    userAnswer,
+    judgeResponse,
+    lang
+  );
+  const isZh = lang === 'zh';
+
+  const systemPrompt = isZh
+    ? `你是一个哲学家角色扮演助手。
+${philosopherInstruction}
+
+要求：
+1. 严格按格式输出 [Persona: 哲学家名字] 标签
+2. 每个哲学家只能说 1-2 句话
+3. 动作/神态描写要简洁
+4. 不要重复审判机已经说过的话
+5. 必须有至少1位哲学家发言`
+    : `You are a philosopher role-playing assistant.
+${philosopherInstruction}
+
+Requirements:
+1. Output strictly in format [Persona: Philosopher Name] tag
+2. Each philosopher can only speak 1-2 sentences
+3. Keep action/expression descriptions concise
+4. Do not repeat what the Judge has already said
+5. At least one philosopher must respond`;
+
+  const messages: any[] = [
+    { role: 'system', content: systemPrompt },
+    {
+      role: 'user',
+      content: isZh
+        ? `请作为匹配到的哲学家，对用户的回答发表看法。`
+        : `Please share your views as the matched philosopher.`
+    }
+  ];
+
+  if (!sessionId) {
+    sessionId = Date.now().toString();
+  }
+
+  // 调用 API
+  const response = await fetch(DEEPSEEK_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: messages,
+      stream: true,
+      temperature: 0.7
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API Error: ${response.status} - ${errorText}`);
+  }
+
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+  
+  if (!reader) {
+    throw new Error('Failed to create reader');
+  }
+
+  // 先收集完整响应，再解析和逐个输出
+  let fullResponse = '';
+  
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    const chunk = decoder.decode(value, { stream: true });
+    const lines = chunk.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const dataStr = line.slice(6);
+        // 跳过 [DONE]
+        if (dataStr === '[DONE]') continue;
+        try {
+          const data = JSON.parse(dataStr);
+          const delta = data.choices[0].delta.content || '';
+          fullResponse += delta;
+        } catch (e) {
+          // ignore parse errors
+        }
+      }
+    }
+  }
+  
+  console.log('哲学家完整回复:', fullResponse);
+  
+  if (!fullResponse.trim()) {
+    console.log('警告：哲学家返回为空');
+    yield { messages: [], isDone: true };
+    return;
+  }
+  
+  // 解析完整的响应，按 [Persona: xxx] 分割
+  const philosopherRegex = /\[Persona:\s*([^\]]+)\]([\s\S]*?)(?=\[Persona:|$)/gi;
+  let match;
+  const philosophers: { name: string; content: string }[] = [];
+  
+  while ((match = philosopherRegex.exec(fullResponse)) !== null) {
+    const name = match[1].trim();
+    const content = match[2].trim();
+    if (content) {
+      philosophers.push({ name, content });
+    }
+  }
+  
+  // 如果没有匹配到哲学家，尝试整段作为回复
+  if (philosophers.length === 0 && fullResponse.trim()) {
+    philosophers.push({
+      name: matchedPersonas[0] || 'Philosopher',
+      content: fullResponse.trim()
+    });
+  }
+  
+  console.log('解析到的哲学家:', philosophers);
+  
+  // 逐个 yield 哲学家消息
+  for (let i = 0; i < philosophers.length; i++) {
+    const p = philosophers[i];
+    yield {
+      messages: [{
+        id: '',
+        role: 'assistant',
+        speaker: p.name,
+        content: p.content,
+        timestamp: Date.now()
+      }],
+      isDone: i === philosophers.length - 1
+    };
+    // 每个哲学家消息之间加延迟
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+};
+
+// ============================================================
+// 保留原有接口，兼容旧版本
+// ============================================================
+const getSystemPrompt = (mode: DiscoveryMode, intensity: DiscoveryIntensity, lang: string) => {
+  const isZh = lang === 'zh';
+  
+  const basePrompt = isZh 
+    ? `你是一个哲学探索助手。你的目标是通过苏格拉底式的提问，引导用户深入思考特定的哲学主题。
+当前模式：${mode}
+当前强度：${intensity === 'QUICK' ? '快速探索（3-5个问题）' : '深度探索（8-10个问题）'}
+
+要求：
+1. 每次只问一个问题。
+2. 问题要循序渐进，从浅入深。
+3. 结合用户的回答进行追问。
+4. 如果用户回答得足够深入，或者达到了探索强度的要求，请在回复的最后加上 "[DONE]" 标记，表示探索结束。
+5. 你的回复必须严格按照系统指令的纯文本格式输出，包含角色标签和最后的 [Suggestions] 标签。`
+    : `You are a philosophical exploration assistant. Your goal is to guide the user to think deeply about specific philosophical themes through Socratic questioning.
+Current Mode: ${mode}
+Current Intensity: ${intensity === 'QUICK' ? 'Quick Exploration (3-5 questions)' : 'Deep Exploration (8-10 questions)'}
+
+Requirements:
+1. Ask only one question at a time.
+2. Questions should be progressive, from shallow to deep.
+3. Follow up based on the user's answers.
+4. If the user has answered deeply enough, or the exploration intensity requirement is met, please add the "[DONE]" tag at the end of your response to indicate the end of the exploration.
+5. Your response MUST strictly follow the plain text format specified in the system instructions, including role tags and the final [Suggestions] tag.`;
+
+  return basePrompt;
+};
+
+export const streamNextQuestion = async function* (
+  history: Message[], 
+  mode: DiscoveryMode, 
+  intensity: DiscoveryIntensity, 
+  settings: AppSettings,
+  lang: string = 'zh'
+): AsyncGenerator<{ messages: Message[], isDone: boolean }> {
+  // 直接调用审判机回复（两阶段模式的第一阶段）
+  // 第二阶段在 App.tsx 中处理
+  yield* streamJudgeResponse(history, mode, intensity, settings, lang);
+};
+
+export const generateFinalAnalysis = async (
+  history: Message[], 
+  mode: DiscoveryMode, 
+  settings: AppSettings
+): Promise<DiscoveryResult> => {
+  const isZh = history.some(m => m.content.match(/[\u4e00-\u9fa5]/));
+  
+  const systemPrompt = isZh
+    ? `你是一个哲学分析师。请根据用户的对话历史，生成一份详细的哲学性格分析报告。
+你的回复必须是 JSON 格式，包含以下字段：
+- title (字符串，如 "荒诞的反抗者")
+- summary (字符串，详细分析)
+- philosophicalTrend (字符串，哲学倾向)
+- keyInsights (字符串数组，3-4个关键洞察)
+- suggestedPaths (字符串数组，2-3条进化路径)
+- motto (字符串，一句话格言)
+- dimensions (对象数组，包含 label, value(0-100), description)`
+    : `You are a philosophical analyst. Please generate a detailed philosophical personality analysis report based on the user's conversation history.
+Your response MUST be in JSON format, containing:
+- title (string, e.g., "The Absurd Rebel")
+- summary (string, detailed analysis)
+- philosophicalTrend (string, philosophical tendency)
+- keyInsights (string array, 3-4 key insights)
+- suggestedPaths (string array, 2-3 evolution paths)
+- motto (string, one-sentence motto)
+- dimensions (object array, with label, value(0-100), description)`;
+
+  const messages: any[] = [
+    { role: 'system', content: systemPrompt }
+  ];
+
+  for (const msg of history) {
+    if (msg.content.startsWith('START')) continue;
+    messages.push({
+      role: msg.role === 'assistant' ? 'assistant' : 'user',
+      content: msg.content
+    });
+  }
+
+  return callWithRetry(async () => {
+    const response = await fetch(DEEPSEEK_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: messages,
+        response_format: { type: 'json_object' },
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API Error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const contentStr = data.choices[0].message.content;
+    
+    try {
+      const parsed = JSON.parse(contentStr);
+      
+      // 兼容 DiscoveryResult 格式
+      return {
+        title: parsed.title || '',
+        summary: parsed.summary || '',
+        philosophicalTrend: parsed.philosophicalTrend || '',
+        keyInsights: parsed.keyInsights || [],
+        suggestedPaths: parsed.suggestedPaths || [],
+        motto: parsed.motto || '',
+        dimensions: parsed.dimensions || []
+      } as DiscoveryResult;
+    } catch (e) {
+      throw new Error('Failed to parse analysis result');
+    }
+  });
+};
+
+export const getChatHistory = async (): Promise<Message[]> => {
+  return [];
+};
+
+export const clearSession = () => {
+  sessionId = null;
+};
