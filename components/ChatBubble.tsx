@@ -169,8 +169,11 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
             {optionMatch.map((opt, i) => {
               const content = opt.replace(/^[AB]\.\s*/, '').split('[SEP]')[0].trim();
               return (
-                <div key={i} className="flex items-center gap-3 p-4 rounded-2xl border border-slate-200 bg-white hover:shadow-md transition-shadow cursor-pointer">
-                  <span className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white bg-slate-800">
+                <div 
+                  key={i} 
+                  className="flex items-center gap-3 p-4 rounded-2xl border border-slate-200 bg-white hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 cursor-pointer"
+                >
+                  <span className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white bg-blue-600 shrink-0">
                     {opt.startsWith('A.') ? 'A' : 'B'}
                   </span>
                   <span className="font-medium text-slate-700">
@@ -188,20 +191,21 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
       
       // 普通段落
       return (
-        <p key={index} className={`mb-4 ${isQuestion ? 'font-bold text-gray-900 text-center text-lg' : isTransition ? 'text-center text-gray-600 mt-4' : 'text-gray-700 text-center'}`}>
+        <p key={index} className={`mb-4 ${isQuestion ? 'font-bold text-slate-900 text-center text-lg' : isTransition ? 'text-center text-slate-500 mt-4' : 'text-slate-700 text-center'}`}>
           {trimmed}
         </p>
       );
     });
   };
 
+  // ===== 审判机样式 =====
   if (isJudge) {
     return (
       <div className="flex w-full mb-6 justify-center">
         <div className="max-w-[95%] md:max-w-[80%]">
           {/* 角色标识 - 居中 */}
           <div className="flex flex-col items-center mb-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center shadow-lg">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center shadow-lg ring-4 ring-blue-500/10">
               <span className="text-lg">⚖️</span>
             </div>
             <span className="text-sm font-bold text-slate-700 mt-2">
@@ -209,9 +213,9 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
             </span>
           </div>
           
-          {/* 消息气泡 */}
-          <div className="bg-gradient-to-b from-amber-50 to-[#f5f0e6] border border-amber-200 rounded-2xl p-5 shadow-md">
-            <div className="text-lg md:text-xl leading-relaxed whitespace-pre-wrap text-gray-800 font-serif text-center">
+          {/* 消息气泡 - 白色背景 + 左边框强调 */}
+          <div className="bg-white rounded-2xl p-5 shadow-md border-l-4 border-l-blue-600">
+            <div className="text-lg md:text-xl leading-relaxed whitespace-pre-wrap text-slate-800 font-serif text-center">
               {renderJudgeContent(rawContent)}
             </div>
           </div>
@@ -222,24 +226,23 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
 
   if (isPhilosopher) {
     const philosopherKey = Object.keys(philosopherAvatars).find(k => message.speaker?.includes(k));
-    const avatar = philosopherKey ? philosopherAvatars[philosopherKey] : { emoji: '🧑‍🏫', bg: 'bg-gray-50', border: 'border-gray-200' };
+    const avatar = philosopherKey ? philosopherAvatars[philosopherKey] : { emoji: '🧑‍🏫', bg: 'bg-white', border: 'border-purple-200' };
     
     return (
       <div className="flex w-full mb-5 justify-start">
         <div className="max-w-[85%]">
           <div className="flex items-center gap-2 mb-2 ml-2">
-            <div className={`w-8 h-8 rounded-full ${avatar.bg} ${avatar.border} border flex items-center justify-center shadow-sm`}>
-              <span className="text-sm">{avatar.emoji}</span>
+            <div className={`w-9 h-9 rounded-full ${avatar.bg} border-2 border-purple-200 flex items-center justify-center shadow-sm`}>
+              <span className="text-lg">{avatar.emoji}</span>
             </div>
-            <span className="text-sm font-medium text-slate-600">{message.speaker}</span>
-            <span className="text-xs text-slate-300">•</span>
-            <span className="text-xs text-slate-400">{formatTime(message.timestamp)}</span>
+            <span className="text-sm font-bold text-slate-700">{message.speaker}</span>
           </div>
           
+          {/* 消息气泡 - 白色背景 + 紫色左边框强调 */}
           <div className="relative group">
-            <div className="absolute -left-2 top-4 w-0 h-0 border-t-8 border-r-8 border-b-8 border-r-transparent border-t-transparent border-b-transparent"></div>
-            <div className={`${avatar.bg} px-5 py-4 rounded-2xl shadow-sm border ${avatar.border} relative`}>
-              <div className="absolute -top-2 -left-1 text-4xl text-slate-300/50 font-serif leading-none">"</div>
+            <div className="bg-white rounded-2xl p-4 shadow-md border-l-4 border-l-purple-500 pl-5">
+              {/* 引号装饰 */}
+              <div className="absolute top-0 left-2 text-4xl text-purple-200 font-serif leading-none select-none">"</div>
               
               {/* 提取主要内容和动作描写 */}
               {(() => {
@@ -248,7 +251,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
                   const mainContent = rawContent.slice(0, actionMatch.index).trim();
                   return (
                     <>
-                      <div className="text-base leading-relaxed whitespace-pre-wrap text-gray-800 pl-3 font-heiti">
+                      <div className="text-base leading-relaxed whitespace-pre-wrap text-slate-700 pl-3 font-sans">
                         {shouldUseTypewriter ? (
                           <TypewriterText text={mainContent} speed={20} onComplete={handleTypingComplete} />
                         ) : (
@@ -264,7 +267,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
                   );
                 }
                 return (
-                  <div className="text-base leading-relaxed whitespace-pre-wrap text-gray-800 pl-3 font-heiti">
+                  <div className="text-base leading-relaxed whitespace-pre-wrap text-slate-700 pl-3 font-sans">
                     {shouldUseTypewriter ? (
                       <TypewriterText text={rawContent} speed={20} onComplete={handleTypingComplete} />
                     ) : (
@@ -290,7 +293,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
           <div className="relative group">
             <div className="absolute -right-2 top-4 w-0 h-0 border-t-8 border-l-8 border-b-8 border-l-transparent border-t-transparent border-b-transparent"></div>
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-4 rounded-2xl shadow-lg">
-              <div className="text-base leading-relaxed whitespace-pre-wrap text-white font-heiti">
+              <div className="text-base leading-relaxed whitespace-pre-wrap text-white font-sans">
                 {shouldUseTypewriter ? (
                   <TypewriterText text={rawContent} speed={15} onComplete={handleTypingComplete} />
                 ) : (
@@ -313,8 +316,8 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
           </div>
           <span className="text-xs text-slate-400">{formatTime(message.timestamp)}</span>
         </div>
-        <div className="bg-white px-5 py-4 rounded-2xl shadow-sm border border-gray-100">
-          <div className="text-base leading-relaxed whitespace-pre-wrap text-gray-800">
+        <div className="bg-white px-5 py-4 rounded-2xl shadow-sm border border-slate-100">
+          <div className="text-base leading-relaxed whitespace-pre-wrap text-slate-800">
             {shouldUseTypewriter ? (
               <TypewriterText text={rawContent} onComplete={handleTypingComplete} />
             ) : (
