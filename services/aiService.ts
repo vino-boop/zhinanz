@@ -2,8 +2,10 @@ import { Message, DiscoveryResult, DiscoveryMode, DiscoveryIntensity, AppSetting
 import { getJudgeInstruction, getPhilosopherInstruction } from "../personas";
 import { matchPersonas } from "../personaKeywords";
 
-const DEEPSEEK_API_KEY = 'sk-8d1043af8f8c48edb1c80048b7f75690';
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+// API 基础地址 - 通过腾讯云服务器调用
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const DEEPSEEK_API_KEY = ''; // 不再需要，前端只发请求，后端处理 Key
+const DEEPSEEK_API_URL = `${API_BASE}/api/ai/deepseek`;
 
 // 保存 sessionId (为了兼容现有接口，虽然直连不需要)
 let sessionId: string | null = null;

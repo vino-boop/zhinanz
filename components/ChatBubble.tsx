@@ -62,11 +62,26 @@ const TypewriterText: React.FC<{ text: string; speed?: number; onComplete?: () =
   const [displayText, setDisplayText] = useState('');
   const [isComplete, setIsComplete] = useState(false);
   const hasCalledComplete = useRef(false);
+  const textRef = useRef(text);
+  const completedRef = useRef('');
 
   useEffect(() => {
+    // 如果已完成且文本没变，直接显示
+    if (completedRef.current === text && isComplete) {
+      return;
+    }
+    
+    textRef.current = text;
+    
     if (skipTyping) {
       setDisplayText(text);
       setIsComplete(true);
+      completedRef.current = text;
+      return;
+    }
+    
+    // 只有当文本真正改变时才重置
+    if (displayText === text) {
       return;
     }
     
@@ -76,12 +91,13 @@ const TypewriterText: React.FC<{ text: string; speed?: number; onComplete?: () =
     
     let i = 0;
     const timer = setInterval(() => {
-      if (i < text.length) {
-        setDisplayText(text.slice(0, i + 1));
+      if (i < textRef.current.length) {
+        setDisplayText(textRef.current.slice(0, i + 1));
         i++;
       } else {
         clearInterval(timer);
         setIsComplete(true);
+        completedRef.current = textRef.current;
         if (onComplete && !hasCalledComplete.current) {
           hasCalledComplete.current = true;
           onComplete();
@@ -90,7 +106,12 @@ const TypewriterText: React.FC<{ text: string; speed?: number; onComplete?: () =
     }, speed);
     
     return () => clearInterval(timer);
-  }, [text, skipTyping, speed, onComplete]);
+  }, [text, skipTyping]); // 移除 onComplete 依赖
+
+  // 完成后直接显示完整文本
+  if (isComplete) {
+    return <span>{text}</span>;
+  }
 
   return (
     <span>
@@ -114,37 +135,88 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
     onTyping?.();
   };
   
-  const renderFormattedText = (text: string) => {
-    const parts = text.split(/(\*\*.*?\*\*)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} className="font-bold text-slate-800">{part.slice(2, -2)}</strong>;
+  // 简单文本渲染
+  const renderSimpleText = (text: string) => {
+    return text.split('\n').map((line, i) => (
+      <span key={i}>
+        {line}
+        {i < text.split('\n').length - 1 && <br />}
+      </span>
+    ));
+  };
+  
+  // 审判机内容格式化 - 简单分段
+  const renderJudgeContent = (text: string) => {
+    // 按句号、问号、换行分割段落
+    const paragraphs = text
+      .replace(/([。？？])\s*/g, '$1\n')
+      .split('\n')
+      .filter(p => p.trim());
+    
+    return paragraphs.map((para, index) => {
+      const trimmed = para.trim();
+      if (!trimmed) return null;
+      
+      // 判断是否是核心问题（以问号结尾）
+      const isQuestion = trimmed.endsWith('？') || trimmed.endsWith('?');
+      
+      // 提取选项（A. B.）
+      const optionMatch = trimmed.match(/[AB]\.\s*([^\n]+)/g);
+      
+      if (optionMatch) {
+        return (
+          <div key={index} className="space-y-3 mt-4">
+            {optionMatch.map((opt, i) => {
+              const content = opt.replace(/^[AB]\.\s*/, '').split('[SEP]')[0].trim();
+              return (
+                <div 
+                  key={i} 
+                  className="flex items-center gap-3 p-4 rounded-2xl border border-slate-200 bg-white hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 cursor-pointer"
+                >
+                  <span className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white bg-blue-600 shrink-0">
+                    {opt.startsWith('A.') ? 'A' : 'B'}
+                  </span>
+                  <span className="font-medium text-slate-700">
+                    {content}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        );
       }
-      return part;
+      
+      // 段落判断
+      const isTransition = trimmed.includes('问你') || trimmed.includes('问你：') || trimmed.includes('问你：');
+      
+      // 普通段落
+      return (
+        <p key={index} className={`mb-4 ${isQuestion ? 'font-bold text-slate-900 text-center text-lg' : isTransition ? 'text-center text-slate-500 mt-4' : 'text-slate-700 text-center'}`}>
+          {trimmed}
+        </p>
+      );
     });
   };
 
+  // ===== 审判机样式 =====
   if (isJudge) {
     return (
-      <div className="flex w-full mb-6 justify-start">
-        <div className="max-w-[90%] md:max-w-[75%]">
-          <div className="flex items-center gap-2 mb-2 ml-2">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center shadow-md">
-              <span className="text-sm">⚖️</span>
+      <div className="flex w-full mb-6 justify-center">
+        <div className="max-w-[95%] md:max-w-[80%]">
+          {/* 角色标识 - 居中 */}
+          <div className="flex flex-col items-center mb-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center shadow-lg ring-4 ring-blue-500/10">
+              <span className="text-lg">⚖️</span>
             </div>
-            <span className="text-xs text-slate-500 font-medium tracking-wide">
-              {language === 'zh' ? '审判机' : 'The Judge'}
+            <span className="text-sm font-bold text-slate-700 mt-2">
+              {language === 'zh' ? '审判机' : 'THE JUDGE'}
             </span>
-            <span className="text-xs text-slate-300">•</span>
-            <span className="text-xs text-slate-400">{formatTime(message.timestamp)}</span>
           </div>
           
-          <div className="bg-gradient-to-br from-[#f5f0e6] to-[#ebe4d4] border-2 border-slate-200/60 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-amber-500/5 to-transparent rounded-bl-full"></div>
-            <div className="border-b border-slate-300/40 mb-4 pb-3"></div>
-            
-            <div className="text-lg md:text-xl leading-relaxed whitespace-pre-wrap text-gray-800 font-serif">
-              {renderFormattedText(rawContent)}
+          {/* 消息气泡 - 白色背景 + 左边框强调 */}
+          <div className="bg-white rounded-2xl p-5 shadow-md border-l-4 border-l-blue-600">
+            <div className="text-lg md:text-xl leading-relaxed whitespace-pre-wrap text-slate-800 font-serif text-center">
+              {renderJudgeContent(rawContent)}
             </div>
           </div>
         </div>
@@ -154,38 +226,56 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
 
   if (isPhilosopher) {
     const philosopherKey = Object.keys(philosopherAvatars).find(k => message.speaker?.includes(k));
-    const avatar = philosopherKey ? philosopherAvatars[philosopherKey] : { emoji: '🧑‍🏫', bg: 'bg-gray-50', border: 'border-gray-200' };
+    const avatar = philosopherKey ? philosopherAvatars[philosopherKey] : { emoji: '🧑‍🏫', bg: 'bg-white', border: 'border-purple-200' };
     
     return (
       <div className="flex w-full mb-5 justify-start">
         <div className="max-w-[85%]">
           <div className="flex items-center gap-2 mb-2 ml-2">
-            <div className={`w-8 h-8 rounded-full ${avatar.bg} ${avatar.border} border flex items-center justify-center shadow-sm`}>
-              <span className="text-sm">{avatar.emoji}</span>
+            <div className={`w-9 h-9 rounded-full ${avatar.bg} border-2 border-purple-200 flex items-center justify-center shadow-sm`}>
+              <span className="text-lg">{avatar.emoji}</span>
             </div>
-            <span className="text-sm font-medium text-slate-600">{message.speaker}</span>
-            <span className="text-xs text-slate-300">•</span>
-            <span className="text-xs text-slate-400">{formatTime(message.timestamp)}</span>
+            <span className="text-sm font-bold text-slate-700">{message.speaker}</span>
           </div>
           
+          {/* 消息气泡 - 白色背景 + 紫色左边框强调 */}
           <div className="relative group">
-            <div className="absolute -left-2 top-4 w-0 h-0 border-t-8 border-r-8 border-b-8 border-r-transparent border-t-transparent border-b-transparent"></div>
-            <div className={`${avatar.bg} px-5 py-4 rounded-2xl shadow-sm border ${avatar.border} relative`}>
-              <div className="absolute -top-2 -left-1 text-4xl text-slate-300/50 font-serif leading-none">"</div>
+            <div className="bg-white rounded-2xl p-4 shadow-md border-l-4 border-l-purple-500 pl-5">
+              {/* 引号装饰 */}
+              <div className="absolute top-0 left-2 text-4xl text-purple-200 font-serif leading-none select-none">"</div>
               
-              <div className="text-base leading-relaxed whitespace-pre-wrap text-gray-800 pl-3 font-heiti">
-                {shouldUseTypewriter ? (
-                  <TypewriterText text={rawContent} speed={20} onComplete={handleTypingComplete} />
-                ) : (
-                  renderFormattedText(rawContent)
-                )}
-              </div>
-              
-              {rawContent.includes('（') && rawContent.includes('）') && (
-                <div className="mt-2 text-xs text-slate-400/60 italic pl-3 font-heiti">
-                  {rawContent.match(/（[^）]+）/)?.[0]}
-                </div>
-              )}
+              {/* 提取主要内容和动作描写 */}
+              {(() => {
+                const actionMatch = rawContent.match(/（[^）]+）$/);
+                if (actionMatch) {
+                  const mainContent = rawContent.slice(0, actionMatch.index).trim();
+                  return (
+                    <>
+                      <div className="text-base leading-relaxed whitespace-pre-wrap text-slate-700 pl-3 font-sans">
+                        {shouldUseTypewriter ? (
+                          <TypewriterText text={mainContent} speed={20} onComplete={handleTypingComplete} />
+                        ) : (
+                          renderSimpleText(mainContent)
+                        )}
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-slate-100">
+                        <span className="text-xs text-slate-400 italic">
+                          {actionMatch[0]}
+                        </span>
+                      </div>
+                    </>
+                  );
+                }
+                return (
+                  <div className="text-base leading-relaxed whitespace-pre-wrap text-slate-700 pl-3 font-sans">
+                    {shouldUseTypewriter ? (
+                      <TypewriterText text={rawContent} speed={20} onComplete={handleTypingComplete} />
+                    ) : (
+                      renderSimpleText(rawContent)
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -203,7 +293,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
           <div className="relative group">
             <div className="absolute -right-2 top-4 w-0 h-0 border-t-8 border-l-8 border-b-8 border-l-transparent border-t-transparent border-b-transparent"></div>
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-4 rounded-2xl shadow-lg">
-              <div className="text-base leading-relaxed whitespace-pre-wrap text-white font-heiti">
+              <div className="text-base leading-relaxed whitespace-pre-wrap text-white font-sans">
                 {shouldUseTypewriter ? (
                   <TypewriterText text={rawContent} speed={15} onComplete={handleTypingComplete} />
                 ) : (
@@ -226,12 +316,12 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
           </div>
           <span className="text-xs text-slate-400">{formatTime(message.timestamp)}</span>
         </div>
-        <div className="bg-white px-5 py-4 rounded-2xl shadow-sm border border-gray-100">
-          <div className="text-base leading-relaxed whitespace-pre-wrap text-gray-800">
+        <div className="bg-white px-5 py-4 rounded-2xl shadow-sm border border-slate-100">
+          <div className="text-base leading-relaxed whitespace-pre-wrap text-slate-800">
             {shouldUseTypewriter ? (
               <TypewriterText text={rawContent} onComplete={handleTypingComplete} />
             ) : (
-              renderFormattedText(rawContent)
+              renderSimpleText(rawContent)
             )}
           </div>
         </div>

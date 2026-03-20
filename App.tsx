@@ -4,12 +4,15 @@ import { Message, DiscoveryResult, AppState, Language, DiscoveryMode, DiscoveryI
 import { streamJudgeResponse, streamPhilosopherResponse, generateFinalAnalysis, clearSession } from './services/aiService';
 import { ChatBubble } from './components/ChatBubble';
 import { ProgressBar } from './components/ProgressBar';
+import { PhilosopherIntro } from './components/PhilosopherIntro';
+import { HistorySidebar, saveToHistory } from './components/HistorySidebar';
+import { ChatSidebar } from './components/ChatSidebar';
 import { INITIAL_QUESTION_POOL } from './constants/questions';
 import { 
   Compass, Send, RefreshCw, Sparkles, ArrowRight, Quote, Languages, Scale, 
   ScrollText, FileImage, Layers, Zap, Dna, Target, Timer, Infinity as InfinityIcon, AlertCircle, Settings, X, Key,
   BrainCircuit, Fingerprint, Cpu, Network, MessageSquare, FlaskConical, Binary, Eye,
-  Dices, LayoutGrid, RotateCcw, User, Lock, Mail, Github, Menu
+  Dices, LayoutGrid, RotateCcw, User, Lock, Mail, Github, Menu, History, ChevronRight
 } from 'lucide-react';
 
 declare const html2canvas: any;
@@ -175,7 +178,11 @@ const App: React.FC = () => {
   
   // Settings & Lottery State
   const [showSettings, setShowSettings] = useState(false);
+  const [showPhilosopherIntro, setShowPhilosopherIntro] = useState(false);
   const [showAllModes, setShowAllModes] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [currentHistoryId, setCurrentHistoryId] = useState<string | undefined>();
   const [isSpinning, setIsSpinning] = useState(false);
   const [isSlotRevealed, setIsSlotRevealed] = useState(false); // New state to control slot machine visibility
   const [drawnMode, setDrawnMode] = useState<DiscoveryMode | null>(null);
@@ -532,24 +539,20 @@ const App: React.FC = () => {
       <div className="flex flex-wrap gap-3 mb-4 animate-in slide-in-from-bottom-3 fade-in duration-300">
         {lastJudgeMsg.suggestions.map((s, i) => {
           const text = parseBilingual(s);
-          // 根据选项数量选择不同样式
-          const isPrimary = i === 0;
           return (
             <button 
               key={i} 
-              onClick={() => handleSend(text)}
-              className={`
-                px-5 py-3 rounded-xl text-sm font-bold transition-all duration-200 
-                hover:scale-105 active:scale-95 shadow-md hover:shadow-lg
+              // 点击后放入输入框，让用户修改后发送
+              onClick={() => setInput(text)}
+              className="
+                px-5 py-3 rounded-2xl text-sm font-medium transition-all duration-200 
+                hover:scale-105 active:scale-95 shadow-sm hover:shadow-md
+                bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-indigo-50
                 flex items-center gap-2
-                ${isPrimary 
-                  ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:from-indigo-600 hover:to-purple-600' 
-                  : 'bg-white border-2 border-slate-200 text-slate-700 hover:border-indigo-300 hover:bg-indigo-50'
-                }
-              `}
+              "
               style={{ animationDelay: `${i * 50}ms` }}
             >
-              <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs">
+              <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs">
                 {i + 1}
               </span>
               {text}
@@ -560,45 +563,66 @@ const App: React.FC = () => {
     );
   };
 
-  // 加载动画
+  // 加载动画 - 更有趣的等待文案
   const renderLoading = () => {
     if (!isLoading) return null;
 
     if (dialoguePhase === 'judge') {
+      const messages = [
+        '审判机正在称量你的回答...',
+        '在善恶的天平上校准...',
+        '寻找你逻辑中的漏洞...',
+        '编织下一个思想困境...',
+        '审判你的哲学立场...',
+      ];
+      const msg = messages[Math.floor(Date.now() / 3000) % messages.length];
+      
       return (
-        <div className="flex items-center justify-center gap-4 py-6 px-6 bg-gradient-to-r from-[#f5f0e6] to-[#ebe4d4] rounded-2xl border border-slate-200/60 shadow-md mb-4">
+        <div className="flex items-center justify-center gap-4 py-5 px-5 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-2xl border border-amber-200 shadow-md mb-4 animate-in fade-in slide-in-from-bottom-2">
           <div className="relative">
-            <Scale className="text-slate-600" size={28} />
-            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full animate-pulse"></div>
+            <Scale className="text-amber-600" size={28} />
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full animate-ping"></div>
           </div>
-          <div className="flex flex-col">
-            <span className="text-slate-700 font-serif font-medium">审判机正在思考...</span>
-            <span className="text-xs text-slate-400">构建思想实验</span>
+          <div className="flex-1">
+            <span className="text-amber-800 font-bold text-sm">⚖️ 审判机</span>
+            <p className="text-amber-700 text-sm mt-0.5">{msg}</p>
           </div>
-          <div className="flex gap-1 ml-2">
-            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => (
+              <span key={i} className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }}></span>
+            ))}
           </div>
         </div>
       );
     }
 
     if (dialoguePhase === 'philosopher') {
+      const messages = [
+        '西西弗斯正在推石头...',
+        '尼采正在审视你的灵魂...',
+        '康德在思考你的答案...',
+        '萨特在说：存在先于本质...',
+        '庄子梦中变为蝴蝶...',
+        '第欧根尼寻找真小人...',
+        '苏格拉底在追问...',
+        '德尔斐：认识你自己...',
+      ];
+      const msg = messages[Math.floor(Date.now() / 2500) % messages.length];
+      
       return (
-        <div className="flex items-center justify-center gap-4 py-6 px-6 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-2xl border border-amber-100 shadow-md mb-4">
+        <div className="flex items-center justify-center gap-4 py-5 px-5 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl border border-purple-200 shadow-md mb-4 animate-in fade-in slide-in-from-bottom-2">
           <div className="relative">
-            <BrainCircuit className="text-amber-600" size={28} />
-            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full animate-ping"></div>
+            <BrainCircuit className="text-purple-600" size={28} />
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full animate-pulse"></div>
           </div>
-          <div className="flex flex-col">
-            <span className="text-amber-800 font-serif font-medium">哲学家正在回应...</span>
-            <span className="text-xs text-amber-500">引经据典中</span>
+          <div className="flex-1">
+            <span className="text-purple-800 font-bold text-sm">🧠 哲学家</span>
+            <p className="text-purple-700 text-sm mt-0.5">{msg}</p>
           </div>
-          <div className="flex gap-1 ml-2">
-            <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-            <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-            <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => (
+              <span key={i} className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }}></span>
+            ))}
           </div>
         </div>
       );
@@ -684,15 +708,22 @@ const App: React.FC = () => {
   if (state === 'landing') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
-        {/* Header Options */}
-        <div className="absolute top-8 right-8 z-50">
-          <button 
-            onClick={() => setShowSettings(true)} 
-            className="p-4 bg-white shadow-sm rounded-full text-slate-600 border border-slate-100 hover:shadow-md transition-all hover:scale-105 active:scale-95 hover:text-indigo-600"
-          >
-            <Settings size={24} />
-          </button>
-        </div>
+        {/* 统一侧边栏 */}
+        <ChatSidebar 
+          language={lang}
+          isOpen={showSidebar}
+          onOpen={() => setShowSidebar(!showSidebar)}
+          mode={null}
+          modeLabel=""
+          intensity=""
+          questionCount={0}
+          currentHistoryId={undefined}
+          onStartNew={() => {}}
+          onOpenSettings={() => setShowSettings(true)}
+          onOpenPhilosopherIntro={() => setShowPhilosopherIntro(true)}
+          onReset={() => {}}
+          onChangeLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
+        />
 
         {/* View All Overlay */}
         {showAllModes && (
@@ -743,13 +774,22 @@ const App: React.FC = () => {
                     <button onClick={() => saveSettings(settings)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-lg hover:bg-black transition-all">
                       {t.saveBtn}
                     </button>
-                    <button 
-                      onClick={() => { setShowSettings(false); setShowAllModes(true); }} 
-                      className="w-full py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-                    >
-                      <LayoutGrid size={18} />
-                      {t.viewAll}
-                    </button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={() => { setShowSettings(false); setShowAllModes(true); }} 
+                        className="py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                      >
+                        <LayoutGrid size={16} />
+                        {t.viewAll}
+                      </button>
+                      <button 
+                        onClick={() => { setShowSettings(false); setShowPhilosopherIntro(true); }} 
+                        className="py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Sparkles size={16} />
+                        {lang === 'zh' ? '哲学家' : 'Philosophers'}
+                      </button>
+                    </div>
                 </div>
               </div>
             </div>
@@ -997,33 +1037,25 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-slate-50">
-      {/* 顶部导航栏 */}
-      <header className="px-6 py-4 flex items-center justify-between border-b bg-white/90 backdrop-blur-sm sticky top-0 z-40 shadow-sm">
-        <div className="flex items-center gap-4">
-          <button onClick={() => {if(window.confirm(t.backBtn)) reset()}} className="p-3 bg-gradient-to-br from-slate-800 to-slate-700 text-white rounded-xl shadow-lg hover:scale-105 transition-transform">
-            <Compass size={20}/>
-          </button>
-          <div>
-            <h1 className="font-serif font-bold text-xl text-slate-800">{t.title}</h1>
-            <p className="text-[10px] text-indigo-500 font-black uppercase tracking-widest">{getModeLabel(mode)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="hidden md:block w-36 bg-slate-100 rounded-full h-2">
-            <div 
-              className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500" 
-              style={{width: `${Math.min(100, (questionCount / (intensity==='QUICK'?QUICK_TARGET:10)) * 100)}%`}}
-            ></div>
-          </div>
-          <span className="text-xs text-slate-400 font-medium">{questionCount}/{intensity==='QUICK'?QUICK_TARGET:10}+</span>
-          <button onClick={() => setLang(l => l==='zh'?'en':'zh')} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors bg-slate-50 rounded-lg">
-            <Languages size={18}/>
-          </button>
-        </div>
-      </header>
+      {/* 聊天页面侧边栏 */}
+      <ChatSidebar 
+        language={lang}
+        isOpen={showSidebar}
+        onOpen={() => setShowSidebar(!showSidebar)}
+        mode={mode}
+        modeLabel={getModeLabel(mode)}
+        intensity={intensity}
+        questionCount={questionCount}
+        currentHistoryId={currentHistoryId}
+        onStartNew={() => { /* 开始新对话 */ }}
+        onOpenSettings={() => setShowSettings(true)}
+        onOpenPhilosopherIntro={() => setShowPhilosopherIntro(true)}
+        onReset={reset}
+        onChangeLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
+      />
 
       {/* 聊天内容区 */}
-      <main ref={scrollRef} className="flex-1 overflow-y-auto py-8 pb-48">
+      <main ref={scrollRef} className="flex-1 overflow-y-auto pt-20 pb-48">
         <div className="max-w-3xl mx-auto px-4">
           {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} onTyping={handleTyping} />)}
           {error && <div className="p-8 bg-red-50 rounded-2xl text-center space-y-4 max-w-md mx-auto border border-red-100">
@@ -1042,20 +1074,38 @@ const App: React.FC = () => {
             <textarea 
               value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter' && !e.shiftKey){e.preventDefault();handleSend();}}} 
               placeholder={t.inputPlaceholder} rows={1} disabled={!!error || isLoading} 
-              className="flex-1 px-5 py-3 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-indigo-200 focus:bg-white outline-none text-base resize-none transition-all disabled:opacity-50" 
+              className="flex-1 px-5 py-3 bg-slate-50 rounded-2xl border-2 border-slate-200 focus:border-blue-500 focus:bg-white outline-none text-base resize-none transition-all duration-200 disabled:opacity-50" 
             />
-            <button onClick={() => handleSend()} disabled={!input.trim() || isLoading || !!error} className="px-5 py-3 bg-gradient-to-br from-slate-800 to-slate-700 text-white rounded-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-30 shadow-lg">
+            <button onClick={() => handleSend()} disabled={!input.trim() || isLoading || !!error} className="px-5 py-3 bg-blue-600 text-white rounded-2xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-30 disabled:hover:scale-100 shadow-lg hover:shadow-xl">
               <Send size={20}/>
             </button>
           </div>
           {/* 生成报告按钮 - 用户回答后 或 无上限模式10题后随时出现 */}
           {(canFinishEarly || (intensity === 'DEEP' && questionCount >= 10)) && !error && (
-            <button onClick={analyze} className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
+            <button onClick={analyze} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
               <Sparkles size={20}/>{t.finishBtn}
             </button>
           )}
         </div>
       </footer>
+
+      {/* 哲学家介绍弹窗 */}
+      {showPhilosopherIntro && (
+        <PhilosopherIntro language={lang} onClose={() => setShowPhilosopherIntro(false)} />
+      )}
+
+      {/* 历史记录侧边栏 */}
+      <HistorySidebar 
+        language={lang} 
+        isOpen={showHistory} 
+        onClose={() => setShowHistory(false)}
+        onLoadHistory={(history) => {
+          // 加载历史记录的逻辑
+          console.log('Load history:', history);
+          setShowHistory(false);
+        }}
+        currentHistoryId={currentHistoryId}
+      />
     </div>
   );
 };
