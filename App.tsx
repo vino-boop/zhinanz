@@ -1055,7 +1055,7 @@ const App: React.FC = () => {
       />
 
       {/* 聊天内容区 */}
-      <main ref={scrollRef} className="flex-1 overflow-y-auto pb-48">
+      <main ref={scrollRef} className="flex-1 overflow-y-auto pt-20 pb-48">
         <div className="max-w-3xl mx-auto px-4">
           {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} onTyping={handleTyping} />)}
           {error && <div className="p-8 bg-red-50 rounded-2xl text-center space-y-4 max-w-md mx-auto border border-red-100">
@@ -1074,15 +1074,15 @@ const App: React.FC = () => {
             <textarea 
               value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter' && !e.shiftKey){e.preventDefault();handleSend();}}} 
               placeholder={t.inputPlaceholder} rows={1} disabled={!!error || isLoading} 
-              className="flex-1 px-5 py-3 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-indigo-200 focus:bg-white outline-none text-base resize-none transition-all disabled:opacity-50" 
+              className="flex-1 px-5 py-3 bg-slate-50 rounded-2xl border-2 border-slate-200 focus:border-blue-500 focus:bg-white outline-none text-base resize-none transition-all duration-200 disabled:opacity-50" 
             />
-            <button onClick={() => handleSend()} disabled={!input.trim() || isLoading || !!error} className="px-5 py-3 bg-gradient-to-br from-slate-800 to-slate-700 text-white rounded-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-30 shadow-lg">
+            <button onClick={() => handleSend()} disabled={!input.trim() || isLoading || !!error} className="px-5 py-3 bg-blue-600 text-white rounded-2xl hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-30 disabled:hover:scale-100 shadow-lg hover:shadow-xl">
               <Send size={20}/>
             </button>
           </div>
           {/* 生成报告按钮 - 用户回答后 或 无上限模式10题后随时出现 */}
           {(canFinishEarly || (intensity === 'DEEP' && questionCount >= 10)) && !error && (
-            <button onClick={analyze} className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
+            <button onClick={analyze} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
               <Sparkles size={20}/>{t.finishBtn}
             </button>
           )}
@@ -1105,16 +1105,6 @@ const App: React.FC = () => {
           setShowHistory(false);
         }}
         currentHistoryId={currentHistoryId}
-      />
-
-      {/* 主页侧边栏 */}
-      <LandingSidebar 
-        language={lang}
-        isOpen={showLandingSidebar}
-        onOpen={() => setShowLandingSidebar(!showLandingSidebar)}
-        onOpenSettings={() => setShowSettings(true)}
-        onOpenPhilosopherIntro={() => setShowPhilosopherIntro(true)}
-        onOpenHistory={() => setShowHistory(true)}
       />
     </div>
   );
