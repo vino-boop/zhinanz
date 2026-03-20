@@ -2,10 +2,9 @@ import { Message, DiscoveryResult, DiscoveryMode, DiscoveryIntensity, AppSetting
 import { getJudgeInstruction, getPhilosopherInstruction } from "../personas";
 import { matchPersonas } from "../personaKeywords";
 
-// API 基础地址 - 通过腾讯云服务器调用
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-const DEEPSEEK_API_KEY = ''; // 不再需要，前端只发请求，后端处理 Key
-const DEEPSEEK_API_URL = `${API_BASE}/api/ai/deepseek`;
+// API 基础地址 - 通过 Vercel 代理访问
+const API_BASE = '';
+const DEEPSEEK_API_URL = `${window.location.origin}/api/ai/deepseek`;
 
 // 保存 sessionId (为了兼容现有接口，虽然直连不需要)
 let sessionId: string | null = null;
@@ -144,12 +143,11 @@ Requirements:
     sessionId = Date.now().toString();
   }
 
-  // 调用 API
+  // 调用 API (通过后端代理，不需要前端添加 Authorization)
   const response = await fetch(DEEPSEEK_API_URL, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       model: 'deepseek-chat',
@@ -285,12 +283,11 @@ Requirements:
     sessionId = Date.now().toString();
   }
 
-  // 调用 API
+  // 调用 API (通过后端代理)
   const response = await fetch(DEEPSEEK_API_URL, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       model: 'deepseek-chat',
@@ -472,8 +469,7 @@ Your response MUST be in JSON format, containing:
     const response = await fetch(DEEPSEEK_API_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         model: 'deepseek-chat',

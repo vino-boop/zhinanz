@@ -17,9 +17,28 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   return response.json();
 }
 
+// 账号认证模块
+export const authApi = {
+  login: (username: string, password: string) => 
+    fetchApi('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+    }),
+  register: (username: string, password: string, email?: string) => 
+    fetchApi('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, email })
+    }),
+};
+
 // 哲思模块
 export const philosophyApi = {
-  getHistory: (userId: string) => fetchApi(`/philosophy/history/${userId}`),
+  getHistory: (userId: string) => fetchApi<{ history: any[] }>(`/philosophy/history/${userId}`),
+  saveHistory: (userId: string, sessionId: string, messages: any[], mode: string, result?: any) => 
+    fetchApi<{ success: boolean }>('/philosophy/history', {
+      method: 'POST',
+      body: JSON.stringify({ userId, sessionId, messages, mode, result })
+    }),
   getUser: (userId: string) => fetchApi(`/philosophy/user/${userId}`),
   getQuestions: () => fetchApi('/philosophy/questions'),
   getPhilosopherPrompts: () => fetchApi('/philosophy/prompts/philosopher'),

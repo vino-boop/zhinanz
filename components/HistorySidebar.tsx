@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Language, DiscoveryMode, DiscoveryResult } from '../types';
 import { X, Clock, CheckCircle, MessageCircle, Trash2, ChevronRight, History } from 'lucide-react';
+import { philosophyApi } from '../services/apiClient';
 
 interface ChatHistory {
   id: string;
@@ -33,14 +34,45 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
 
   // 加载历史记录
   useEffect(() => {
-    const saved = localStorage.getItem('explorer_compass_history');
-    if (saved) {
+    const loadHistory = async () => {
+      // 1. 尝试从后端加载
       try {
-        const parsed = JSON.parse(saved);
-        setHistory(parsed.sort((a: ChatHistory, b: ChatHistory) => b.timestamp - a.timestamp));
+        const savedUser = localStorage.getItem('user');
+        const userId = savedUser ? JSON.parse(savedUser).username : 'guest';
+        const res = await philosophyApi.getHistory(userId);
+        if (res && res.history && res.history.length > 0) {
+          // 转换后端数据格式为前端格式
+          const backendHistory: ChatHistory[] = res.history.map((h: any) => ({
+            id: h.sessionId,
+            mode: h.mode,
+            modeLabel: h.mode,
+            questionCount: h.messages?.filter((m: any) => m.role === 'user').length || 0,
+            lastMessage: h.messages?.[h.messages.length - 1]?.content?.slice(0, 50) || '',
+            timestamp: new Date(h.createdAt).getTime(),
+            result: h.result,
+            isComplete: !!h.result
+          }));
+          setHistory(backendHistory.sort((a: ChatHistory, b: ChatHistory) => b.timestamp - a.timestamp));
+          return;
+        }
       } catch (e) {
-        console.error('Failed to load history:', e);
+        console.error('Failed to load from backend:', e);
       }
+      
+      // 2. 后端没有则从 localStorage 加载
+      const saved = localStorage.getItem('explorer_compass_history');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setHistory(parsed.sort((a: ChatHistory, b: ChatHistory) => b.timestamp - a.timestamp));
+        } catch (e) {
+          console.error('Failed to load history:', e);
+        }
+      }
+    };
+    
+    if (isOpen) {
+      loadHistory();
     }
   }, [isOpen]);
 

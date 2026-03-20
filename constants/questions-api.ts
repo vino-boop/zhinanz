@@ -1,8 +1,8 @@
 // 哲思模块 API - 从后端获取问题池
 import { DiscoveryMode, QuestionPoolItem } from "../types";
 
-// 后端API地址 - 可以通过环境变量配置
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+// API 基础地址 - 通过 Vercel 代理访问
+const API_BASE = '';
 
 interface BackendQuestion {
   id: number;
