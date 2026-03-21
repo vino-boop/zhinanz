@@ -1,8 +1,8 @@
 // 哲思模块 API - 从后端获取问题池
 import { DiscoveryMode, QuestionPoolItem } from "../types";
 
-// API 基础地址 - 通过 Vercel 代理访问
-const API_BASE = '';
+// API 基础地址 - 调用云端服务器
+const API_BASE = 'http://42.193.225.114:3001';
 
 interface BackendQuestion {
   id: number;
