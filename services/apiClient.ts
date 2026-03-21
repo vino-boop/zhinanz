@@ -1,5 +1,5 @@
 // API 客户端 - 用于调用后端服务
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001') + '/api';
+const API_BASE_URL = 'http://42.193.225.114:3001/api';
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -24,10 +24,10 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ username, password })
     }),
-  register: (username: string, password: string, email?: string) => 
+  register: (username: string, password: string, phone?: string) => 
     fetchApi('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ username, password, email })
+      body: JSON.stringify({ username, password, phone: phone || '' })
     }),
 };
 
