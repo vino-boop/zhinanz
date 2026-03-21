@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Message, DiscoveryResult, AppState, Language, DiscoveryMode, DiscoveryIntensity, AppSettings, ApiProvider } from './types';
 import { streamJudgeResponse, streamPhilosopherResponse, generateFinalAnalysis, clearSession } from './services/aiService';
+import { philosophyApi, authApi } from './services/apiClient';
 import { ChatBubble } from './components/ChatBubble';
 import { ProgressBar } from './components/ProgressBar';
 import { PhilosopherIntro } from './components/PhilosopherIntro';
@@ -164,6 +165,7 @@ const ITEM_HEIGHT = 160; // px
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>('auth');
+  const [user, setUser] = useState<{id: number; username: string; email: string; role: string} | null>(null);
   const [mode, setMode] = useState<DiscoveryMode | null>(null);
   const [intensity, setIntensity] = useState<DiscoveryIntensity>('QUICK');
   const [lang, setLang] = useState<Language>('zh');
@@ -197,6 +199,11 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : { provider: 'gemini', apiKey: '' };
   });
 
+  // 登录表单状态
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false); // 切换登录/注册
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const reportContainerRef = useRef<HTMLDivElement>(null);
@@ -224,6 +231,53 @@ const App: React.FC = () => {
     setDialoguePhase('waiting');
     setLastJudgeContent('');
   };
+
+  // 登录处理
+  const handleLogin = async (username: string, password: string) => {
+    try {
+      const res: any = await authApi.login(username, password);
+      if (res.success) {
+        setUser(res.user);
+        setState('landing');
+        // 保存用户信息到 localStorage
+        localStorage.setItem('user', JSON.stringify(res.user));
+      } else {
+        alert(res.message || '登录失败');
+      }
+    } catch (e: any) {
+      alert(e.message || '登录失败，请检查网络');
+    }
+  };
+
+  // 注册处理
+  const handleRegister = async (username: string, password: string, email?: string) => {
+    try {
+      const res: any = await authApi.register(username, password, email);
+      if (res.success) {
+        setUser(res.user);
+        setState('landing');
+        localStorage.setItem('user', JSON.stringify(res.user));
+      } else {
+        alert(res.message || '注册失败');
+      }
+    } catch (e: any) {
+      alert(e.message || '注册失败，请检查网络');
+    }
+  };
+
+  // 检查已登录状态
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        setUser(parsed);
+        setState('landing');
+      } catch (e) {
+        localStorage.removeItem('user');
+      }
+    }
+  }, []);
 
   const selectMode = (m: DiscoveryMode) => { setMode(m); setState('intensity_select'); setShowAllModes(false); };
   const selectIntensity = (i: DiscoveryIntensity) => { 
@@ -475,6 +529,32 @@ const App: React.FC = () => {
     try {
       const res = await generateFinalAnalysis([{ id: 's', role: 'user', content: 'START', timestamp: 0 }, ...messages], mode, settings);
       setResult(res); setState('result');
+      
+      // 保存到后端历史记录
+      const userId = user?.username || 'guest';
+      const sessionId = `session-${Date.now()}`;
+      const historyData = {
+        userId,
+        sessionId,
+        messages: [{ id: 's', role: 'user', content: 'START', timestamp: 0 }, ...messages],
+        mode,
+        result: res, // 保存分析报告
+        createdAt: new Date().toISOString()
+      };
+      
+      // 保存到服务器
+      philosophyApi.saveHistory(userId, sessionId, historyData.messages, mode).then(() => {
+        console.log('历史记录已保存到服务器');
+      }).catch(err => {
+        console.error('保存历史失败:', err);
+      });
+      
+      // 同时保存到 localStorage（用于侧边栏显示）
+      const { saveToHistory } = await import('./components/HistorySidebar');
+      const modeLabel = getModeLabel(mode);
+      const lastMessage = messages[messages.length - 1]?.content?.slice(0, 50) || '';
+      saveToHistory(mode, modeLabel, messages.filter(m => m.role === 'user').length, lastMessage, res, true);
+      
     } catch (e: any) { 
       console.error(e);
       setError(e.message || "Analysis Failed"); 
@@ -662,6 +742,8 @@ const App: React.FC = () => {
                <input 
                  type="text" 
                  placeholder={t.usernamePlaceholder}
+                 value={loginUsername}
+                 onChange={(e) => setLoginUsername(e.target.value)}
                  className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
                />
             </div>
@@ -670,6 +752,9 @@ const App: React.FC = () => {
                <input 
                  type="password" 
                  placeholder={t.passwordPlaceholder}
+                 value={loginPassword}
+                 onChange={(e) => setLoginPassword(e.target.value)}
+                 onKeyDown={(e) => e.key === 'Enter' && (isRegistering ? handleRegister(loginUsername, loginPassword) : handleLogin(loginUsername, loginPassword))}
                  className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
                />
             </div>
@@ -677,12 +762,26 @@ const App: React.FC = () => {
 
           <div className="space-y-4">
             <button 
-              onClick={() => setState('landing')}
-              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
+              onClick={() => isRegistering ? handleRegister(loginUsername, loginPassword) : handleLogin(loginUsername, loginPassword)}
+              disabled={!loginUsername || !loginPassword}
+              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ArrowRight size={20} />
-              {t.loginBtn}
+              {isRegistering ? (lang === 'zh' ? '注册' : 'Register') : t.loginBtn}
             </button>
+            
+            {/* 切换登录/注册 */}
+            <div className="text-center">
+              <button 
+                onClick={() => setIsRegistering(!isRegistering)}
+                className="text-sm text-indigo-600 hover:text-indigo-800"
+              >
+                {isRegistering 
+                  ? (lang === 'zh' ? '已有账号？立即登录' : 'Already have an account? Login')
+                  : (lang === 'zh' ? '没有账号？立即注册' : 'No account? Register now')
+                }
+              </button>
+            </div>
             
             <div className="relative py-2">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
