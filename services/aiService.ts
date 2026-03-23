@@ -2,9 +2,26 @@ import { Message, DiscoveryResult, DiscoveryMode, DiscoveryIntensity, AppSetting
 import { getJudgeInstruction, getPhilosopherInstruction } from "../personas";
 import { matchPersonas } from "../personaKeywords";
 
-// API 基础地址 - 通过 Vercel 代理访问
-const API_BASE = '';
-const DEEPSEEK_API_URL = `${window.location.origin}/api/ai/deepseek`;
+// 直接调用 DeepSeek API（前端版本，使用用户设置的 API Key）
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+// 从 localStorage 获取 API Key
+function getApiKeyFromStorage(): { apiKey: string; provider: string } {
+  try {
+    const saved = localStorage.getItem('explorer_compass_settings');
+    console.log('读取 localStorage:', saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.apiKey) {
+        return { apiKey: parsed.apiKey, provider: parsed.provider || 'deepseek' };
+      }
+    }
+  } catch (e) {
+    console.warn('读取 localStorage 失败:', e);
+  }
+  return { apiKey: '', provider: 'deepseek' };
+}
 
 // 保存 sessionId (为了兼容现有接口，虽然直连不需要)
 let sessionId: string | null = null;
@@ -143,19 +160,55 @@ Requirements:
     sessionId = Date.now().toString();
   }
 
-  // 调用 API (通过后端代理，不需要前端添加 Authorization)
-  const response = await fetch(DEEPSEEK_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: messages,
-      stream: true,
-      temperature: 0.7
-    })
-  });
+  // 获取 API Key：优先使用 settings，否则从 localStorage 读取
+  let apiKey = settings.apiKey;
+  let provider = settings.provider || 'deepseek';
+  if (!apiKey) {
+    const stored = getApiKeyFromStorage();
+    apiKey = stored.apiKey;
+    provider = stored.provider;
+  }
+  if (!apiKey) {
+    throw new Error('请先在设置中配置 API Key');
+  }
+
+  let response: Response;
+  if (provider === 'deepseek') {
+    // DeepSeek API
+    response = await fetch(DEEPSEEK_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: messages,
+        stream: true,
+        temperature: 0.7
+      })
+    });
+  } else {
+    // Gemini API
+    const geminiUrl = `${GEMINI_API_URL}?key=${apiKey}`;
+    const geminiMessages = messages.map(m => ({
+      role: m.role === 'system' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+    response = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: geminiMessages,
+        generationConfig: {
+          temperature: 0.7,
+          stream: true
+        }
+      })
+    });
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -283,19 +336,50 @@ Requirements:
     sessionId = Date.now().toString();
   }
 
-  // 调用 API (通过后端代理)
-  const response = await fetch(DEEPSEEK_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: messages,
-      stream: true,
-      temperature: 0.7
-    })
-  });
+  // 获取 API Key：优先使用 settings，否则从 localStorage 读取
+  let apiKey = settings.apiKey;
+  let provider = settings.provider || 'deepseek';
+  if (!apiKey) {
+    const stored = getApiKeyFromStorage();
+    apiKey = stored.apiKey;
+    provider = stored.provider;
+  }
+  if (!apiKey) {
+    throw new Error('请先在设置中配置 API Key');
+  }
+
+  let response: Response;
+  if (provider === 'deepseek') {
+    response = await fetch(DEEPSEEK_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: messages,
+        stream: true,
+        temperature: 0.7
+      })
+    });
+  } else {
+    const geminiUrl = `${GEMINI_API_URL}?key=${apiKey}`;
+    const geminiMessages = messages.map(m => ({
+      role: m.role === 'system' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+    response = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: geminiMessages,
+        generationConfig: { temperature: 0.7, stream: true }
+      })
+    });
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -466,26 +550,68 @@ Your response MUST be in JSON format, containing:
   }
 
   return callWithRetry(async () => {
-    const response = await fetch(DEEPSEEK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: messages,
-        response_format: { type: 'json_object' },
-        temperature: 0.7
-      })
-    });
+    // 获取 API Key：优先使用 settings，否则从 localStorage 读取
+    let apiKey = settings.apiKey;
+    let provider = settings.provider || 'deepseek';
+    if (!apiKey) {
+      const stored = getApiKeyFromStorage();
+      apiKey = stored.apiKey;
+      provider = stored.provider;
+    }
+    if (!apiKey) {
+      throw new Error('请先在设置中配置 API Key');
+    }
+
+    let response: Response;
+    if (provider === 'deepseek') {
+      response = await fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: messages,
+          response_format: { type: 'json_object' },
+          temperature: 0.7
+        })
+      });
+    } else {
+      // Gemini 不支持 stream，用于最终分析
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+      const geminiMessages = messages.map(m => ({
+        role: m.role === 'system' ? 'model' : 'user',
+        parts: [{ text: m.content }]
+      }));
+      response = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: geminiMessages,
+          generationConfig: {
+            temperature: 0.7,
+            responseMimeType: 'application/json'
+          }
+        })
+      });
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`API Error: ${response.status} - ${errorText}`);
     }
 
-    const data = await response.json();
-    const contentStr = data.choices[0].message.content;
+    let contentStr: string;
+    if (provider === 'deepseek') {
+      const data = await response.json();
+      contentStr = data.choices[0].message.content;
+    } else {
+      const data = await response.json();
+      contentStr = data.candidates[0].content.parts[0].text;
+    }
     
     try {
       const parsed = JSON.parse(contentStr);

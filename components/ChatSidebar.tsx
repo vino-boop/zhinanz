@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Language, DiscoveryMode, DiscoveryResult } from '../types';
-import { X, Sparkles, Settings, ChevronLeft, Languages, LogOut, Plus, MessageCircle } from 'lucide-react';
+import { X, Sparkles, Settings, ChevronLeft, Languages, LogOut, Plus, MessageCircle, LayoutGrid } from 'lucide-react';
 
 interface ChatHistory {
   id: string;
@@ -25,6 +25,7 @@ interface ChatSidebarProps {
   onStartNew: () => void;
   onOpenSettings: () => void;
   onOpenPhilosopherIntro: () => void;
+  onOpenAllModes: () => void;
   onReset: () => void;
   onChangeLang: () => void;
 }
@@ -41,6 +42,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   onStartNew,
   onOpenSettings,
   onOpenPhilosopherIntro,
+  onOpenAllModes,
   onReset,
   onChangeLang
 }) => {
@@ -82,64 +84,87 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     return date.toLocaleDateString(isZh ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric' });
   };
 
+  // 老虎机配色
+  const slotMachineColors = {
+    bg: '#1e293b',      // slate-800 深蓝灰
+    card: '#334155',    // slate-700
+    cardHover: '#475569', // slate-600
+    text: '#f8fafc',    // slate-50
+    textMuted: '#94a3b8', // slate-400
+    accent: '#6366f1',   // indigo-500
+    border: '#475569',   // slate-600
+  };
+
   if (!isOpen) {
     return (
       <button 
         onClick={onOpen}
-        className="fixed top-4 left-4 z-50 p-3 bg-white shadow-lg rounded-xl text-slate-600 hover:shadow-xl transition-all"
+        className="fixed top-4 left-4 z-50 p-3 shadow-lg rounded-xl text-white transition-all"
+        style={{ background: `linear-gradient(135deg, ${slotMachineColors.accent} 0%, #4f46e5 100%)` }}
       >
-        <Plus size={20} />
+        <Menu size={20} />
       </button>
     );
   }
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black/20 z-40" onClick={onOpen} />
+    <div className="fixed left-0 top-0 h-full w-72 z-50 flex flex-col" style={{ background: slotMachineColors.bg }}>
+      {/* 头部 - 关闭按钮 */}
+      <div className="flex justify-end p-4">
+        <button 
+          onClick={onOpen}
+          className="p-2 rounded-lg transition-colors"
+          style={{ background: slotMachineColors.card, color: slotMachineColors.text }}
+        >
+          <X size={18} />
+        </button>
+      </div>
       
-      <div className="fixed left-0 top-0 h-full w-64 bg-[#171717] z-50 flex flex-col">
-        {/* 头部按钮 */}
-        <div className="p-2">
-          <button 
-            onClick={onOpen}
-            className="w-full flex items-center gap-3 p-3 rounded-xl bg-[#2A2A2A] hover:bg-[#3A3A3A] transition-colors text-white"
-          >
-            <Plus size={18} />
-            <span className="text-sm">{isZh ? '新对话' : 'New Chat'}</span>
-          </button>
-        </div>
+      {/* 头部按钮 */}
+      <div className="px-4 pb-4">
+        <button 
+          onClick={onOpen}
+          className="w-full flex items-center justify-center gap-2 p-3 rounded-xl transition-colors text-white font-medium"
+          style={{ background: `linear-gradient(135deg, ${slotMachineColors.accent} 0%, #4f46e5 100%)` }}
+        >
+          <Plus size={18} />
+          <span className="text-sm">{isZh ? '新对话' : 'New Chat'}</span>
+        </button>
+      </div>
 
-        {/* 历史记录列表 - 类似 ChatGPT */}
-        <div className="flex-1 overflow-y-auto px-2 py-2">
-          <p className="px-3 py-2 text-xs text-[#8E8E8E] font-medium">
+        {/* 历史记录列表 */}
+        <div className="flex-1 overflow-y-auto px-4 py-2">
+          <p className="px-3 py-2 text-xs font-medium" style={{ color: slotMachineColors.textMuted }}>
             {isZh ? '历史记录' : 'History'}
           </p>
           
           {history.length === 0 ? (
-            <div className="px-3 py-4 text-sm text-[#8E8E8E] text-center">
+            <div className="px-3 py-4 text-sm text-center" style={{ color: slotMachineColors.textMuted }}>
               <MessageCircle size={24} className="mx-auto mb-2 opacity-50" />
               <p>{isZh ? '暂无历史' : 'No history'}</p>
             </div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-2">
               {history.map(h => (
                 <div 
                   key={h.id}
-                  className={`group flex items-center justify-between p-2.5 rounded-lg cursor-pointer hover:bg-[#2A2A2A] transition-colors ${
-                    currentHistoryId === h.id ? 'bg-[#2A2A2A]' : ''
+                  className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors ${
+                    currentHistoryId === h.id ? '' : ''
                   }`}
+                  style={{ background: currentHistoryId === h.id ? slotMachineColors.card : 'transparent' }}
                 >
                   <div className="flex-1 min-w-0 mr-2">
-                    <p className="text-sm text-[#E5E5E5] truncate">{h.modeLabel}</p>
-                    <p className="text-xs text-[#8E8E8E]">
+                    <p className="text-sm truncate" style={{ color: slotMachineColors.text }}>{h.modeLabel}</p>
+                    <p className="text-xs" style={{ color: slotMachineColors.textMuted }}>
                       {h.questionCount} {isZh ? '题' : 'Q'} • {formatTime(h.timestamp)}
                     </p>
                   </div>
                   <button 
                     onClick={(e) => deleteHistory(h.id, e)}
-                    className="p-1.5 rounded hover:bg-[#4A4A4A] opacity-0 group-hover:opacity-100 transition-all"
+                    className="p-1.5 rounded opacity-0 group-hover:opacity-100 transition-all"
+                    style={{ background: slotMachineColors.cardHover }}
                   >
-                    <X size={14} className="text-[#8E8E8E]" />
+                    <X size={14} style={{ color: slotMachineColors.textMuted }} />
                   </button>
                 </div>
               ))}
@@ -147,49 +172,36 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           )}
         </div>
 
-        {/* 底部菜单 */}
-        <div className="p-2 border-t border-[#2A2A2A] space-y-1">
+        {/* 底部菜单 - 统一颜色 */}
+        <div className="p-4 space-y-2">
           <button 
-            onClick={() => { onOpenPhilosopherIntro(); onOpen(); }}
-            className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-[#2A2A2A] transition-colors text-sm text-[#E5E5E5]"
+            onClick={() => { onOpenPhilosopherIntro(); }}
+            className="w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-sm font-medium"
+            style={{ background: slotMachineColors.card, color: slotMachineColors.text }}
           >
-            <Sparkles size={16} className="text-purple-400" />
+            <Sparkles size={16} style={{ color: slotMachineColors.accent }} />
             <span>{isZh ? '虚拟哲学家' : 'Philosophers'}</span>
           </button>
 
           <button 
-            onClick={() => { onOpenSettings(); onOpen(); }}
-            className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-[#2A2A2A] transition-colors text-sm text-[#E5E5E5]"
+            onClick={() => { onOpenAllModes(); }}
+            className="w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-sm font-medium"
+            style={{ background: slotMachineColors.card, color: slotMachineColors.text }}
           >
-            <Settings size={16} className="text-amber-400" />
+            <LayoutGrid size={16} style={{ color: slotMachineColors.accent }} />
+            <span>{isZh ? '查看全部问题' : 'View All Themes'}</span>
+          </button>
+
+          <button 
+            onClick={() => { onOpenSettings(); }}
+            className="w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-sm font-medium"
+            style={{ background: slotMachineColors.card, color: slotMachineColors.text }}
+          >
+            <Settings size={16} style={{ color: slotMachineColors.accent }} />
             <span>{isZh ? '设置' : 'Settings'}</span>
-          </button>
-
-          <button 
-            onClick={() => { onChangeLang(); onOpen(); }}
-            className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-[#2A2A2A] transition-colors text-sm text-[#E5E5E5]"
-          >
-            <Languages size={16} className="text-green-400" />
-            <span>{isZh ? '切换语言' : 'Switch Language'}</span>
-          </button>
-
-          <hr className="my-2 border-[#2A2A2A]" />
-
-          <button 
-            onClick={() => { 
-              if (window.confirm(isZh ? '确定结束对话？' : 'End chat?')) {
-                onReset();
-                onOpen();
-              }
-            }}
-            className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-[#2A2A2A] transition-colors text-sm text-red-400"
-          >
-            <LogOut size={16} />
-            <span>{isZh ? '结束对话' : 'End Chat'}</span>
           </button>
         </div>
       </div>
-    </>
   );
 };
 

@@ -103,7 +103,7 @@ export async function getQuestionPoolByMode(mode: DiscoveryMode): Promise<Questi
   
   // 筛选对应分类的问题，如果没有则返回全部
   let filteredQuestions = questions.filter(q => 
-    q.status === 'active' && categories.some(cat => q.category.includes(cat))
+    q.status === 'active' && q.category && categories.some(cat => q.category.includes(cat))
   );
   
   // 如果没有匹配的，返回所有活跃问题

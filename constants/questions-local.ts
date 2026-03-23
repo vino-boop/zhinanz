@@ -271,3 +271,20 @@ export const INITIAL_QUESTION_POOL: Record<DiscoveryMode, QuestionPoolItem[]> = 
     }
   ]
 };
+
+// 本地版本：直接返回 INITIAL_QUESTION_POOL
+export async function initializeQuestionPool(mode: DiscoveryMode): Promise<QuestionPoolItem[]> {
+  return INITIAL_QUESTION_POOL[mode] || [];
+}
+
+// 本地版本：根据 mode 获取问题池
+export async function getQuestionPoolByMode(mode: DiscoveryMode): Promise<QuestionPoolItem[]> {
+  return INITIAL_QUESTION_POOL[mode] || [];
+}
+
+// 本地版本：随机获取一个问题
+export async function getRandomQuestion(mode: DiscoveryMode): Promise<QuestionPoolItem | null> {
+  const pool = await getQuestionPoolByMode(mode);
+  if (pool.length === 0) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}

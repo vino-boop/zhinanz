@@ -1,10 +1,8 @@
-// 问题池 - 从后端API获取
-// 这个文件是主入口，会自动从API加载数据
-
+// 问题池 - 使用本地版本（避免后端API超时）
 import { DiscoveryMode, QuestionPoolItem } from "../types";
 
-// 导入API版本（会自动处理API/本地数据的切换）
-export { INITIAL_QUESTION_POOL, initializeQuestionPool, getQuestionPoolByMode, getRandomQuestion } from "./questions-api";
+// 使用本地问题池
+export { INITIAL_QUESTION_POOL, initializeQuestionPool, getQuestionPoolByMode, getRandomQuestion } from "./questions-local";
 
-// 为了兼容性，也导出本地版本
+// 也导出API版本（备用）
 export { INITIAL_QUESTION_POOL as LOCAL_QUESTION_POOL } from "./questions-local";

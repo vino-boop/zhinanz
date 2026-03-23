@@ -183,7 +183,7 @@ const App: React.FC = () => {
   const [showPhilosopherIntro, setShowPhilosopherIntro] = useState(false);
   const [showAllModes, setShowAllModes] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
   const [currentHistoryId, setCurrentHistoryId] = useState<string | undefined>();
   const [isSpinning, setIsSpinning] = useState(false);
   const [isSlotRevealed, setIsSlotRevealed] = useState(false); // New state to control slot machine visibility
@@ -194,9 +194,22 @@ const App: React.FC = () => {
   const [dialoguePhase, setDialoguePhase] = useState<'judge' | 'philosopher' | 'waiting'>('waiting');
   const [lastJudgeContent, setLastJudgeContent] = useState<string>('');
   
+  // 硬编码的 API Key（从数据库读取）
+  const PHILOSOPHY_API_KEY = 'sk-b9e79da674114733be8df0d48a2095a2';
+  
   const [settings, setSettings] = useState<AppSettings>(() => {
+    // 先检查 localStorage
     const saved = localStorage.getItem('explorer_compass_settings');
-    return saved ? JSON.parse(saved) : { provider: 'gemini', apiKey: '' };
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.apiKey) {
+        return parsed;
+      }
+    }
+    // 如果没有，使用默认 API Key
+    const defaultSettings = { provider: 'deepseek', apiKey: PHILOSOPHY_API_KEY };
+    localStorage.setItem('explorer_compass_settings', JSON.stringify(defaultSettings));
+    return defaultSettings;
   });
 
   // 登录表单状态
@@ -820,6 +833,7 @@ const App: React.FC = () => {
           onStartNew={() => {}}
           onOpenSettings={() => setShowSettings(true)}
           onOpenPhilosopherIntro={() => setShowPhilosopherIntro(true)}
+          onOpenAllModes={() => setShowAllModes(true)}
           onReset={() => {}}
           onChangeLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
         />
@@ -894,6 +908,17 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* 顶部控制栏 */}
+        <div className="fixed top-6 right-6 z-50 flex gap-3">
+          <button 
+            onClick={() => setShowSidebar(!showSidebar)} 
+            className="p-3 bg-white shadow-lg rounded-full hover:bg-indigo-50 transition-all border border-slate-100"
+            title={showSidebar ? '隐藏侧边栏' : '显示侧边栏'}
+          >
+            {showSidebar ? <X size={20} className="text-indigo-600"/> : <Menu size={20} className="text-indigo-600"/>}
+          </button>
+        </div>
 
         {/* Main Content: The Gacha Machine */}
         <div className="w-full max-w-xl text-center space-y-12 z-10 py-10 flex flex-col items-center">
@@ -1149,6 +1174,7 @@ const App: React.FC = () => {
         onStartNew={() => { /* 开始新对话 */ }}
         onOpenSettings={() => setShowSettings(true)}
         onOpenPhilosopherIntro={() => setShowPhilosopherIntro(true)}
+        onOpenAllModes={() => setShowAllModes(true)}
         onReset={reset}
         onChangeLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
       />

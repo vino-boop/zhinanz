@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Language } from '../types';
-import { X, Sparkles, Loader2 } from 'lucide-react';
+import { X, Sparkles } from 'lucide-react';
 
 interface PhilosopherIntroProps {
   language: Language;
   onClose: () => void;
 }
 
-// 哲学家数据 - 延迟加载
-const getPhilosophers = () => [
+// 哲学家数据
+const philosophers = [
   { name: '加缪', emoji: '😤', desc: '存在主义哲学家，荒诞主义的代表，强调在荒诞中反抗' },
   { name: '萨特', emoji: '☕', desc: '存在主义哲学家，强调自由与责任' },
   { name: '尼采', emoji: '🔥', desc: '超人哲学，提出权力意志和永恒轮回' },
@@ -43,97 +43,71 @@ const getPhilosophers = () => [
 
 export const PhilosopherIntro: React.FC<PhilosopherIntroProps> = ({ language, onClose }) => {
   const isZh = language === 'zh';
-  const [isLoading, setIsLoading] = useState(true);
-  const [philosophers, setPhilosophers] = useState<{name: string, emoji: string, desc: string}[]>([]);
-
-  useEffect(() => {
-    // 模拟延迟加载
-    setIsLoading(true);
-    const timer = setTimeout(() => {
-      setPhilosophers(getPhilosophers());
-      setIsLoading(false);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, []);
 
   return (
-    <div className="fixed inset-0 z-[200] bg-slate-900/90 backdrop-blur-md overflow-y-auto">
-      <div className="max-w-4xl mx-auto p-6 pb-20">
+    <div className="fixed inset-0 z-[60] bg-slate-50 overflow-y-auto">
+      <div className="max-w-6xl mx-auto p-8 space-y-8">
         {/* 头部 */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-indigo-500 rounded-2xl flex items-center justify-center">
-              <Sparkles className="text-white" size={24} />
+            <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center">
+              <Sparkles size={24} />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white">
+              <h2 className="text-3xl font-serif font-bold text-slate-900">
                 {isZh ? '虚拟哲学家' : 'Virtual Philosophers'}
               </h2>
-              <p className="text-slate-400 text-sm">
+              <p className="text-slate-500 text-sm">
                 {isZh ? 'AI 扮演的哲学角色，将与您对话' : 'AI-powered philosophical characters'}
               </p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
+            className="p-3 bg-white shadow-sm rounded-full hover:bg-slate-100"
           >
-            <X className="text-white" size={24} />
+            <X size={24} className="text-slate-600" />
           </button>
         </div>
 
-        {/* 加载状态 */}
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="text-indigo-400 animate-spin" size={48} />
-            <p className="text-slate-400 mt-4">{isZh ? '加载中...' : 'Loading...'}</p>
-          </div>
-        ) : (
-          <>
-            {/* 介绍 */}
-            <div className="bg-white/5 rounded-3xl p-6 mb-8 border border-white/10">
-              <h3 className="text-lg font-bold text-white mb-3">
-                {isZh ? '什么是虚拟哲学家？' : 'What are Virtual Philosophers?'}
-              </h3>
-              <p className="text-slate-300 leading-relaxed">
-                {isZh 
-                  ? '在对话过程中，AI会根据您的回答内容，自动匹配相关的哲学家角色。这些哲学家会从各自的哲学体系出发，对您的观点进行点评、质疑或补充。通过与不同哲学家的思想碰撞，帮助您更深层次地审视自己的价值观和思维方式。'
-                  : 'During the conversation, AI will automatically match relevant philosopher characters based on your responses. These philosophers will comment, question, or supplement your views from their respective philosophical systems, helping you examine your values and thinking patterns at a deeper level.'
-                }
-              </p>
-            </div>
+        {/* 介绍 */}
+        <div className="bg-indigo-50 rounded-3xl p-6 border border-indigo-100">
+          <h3 className="text-lg font-bold text-indigo-900 mb-3">
+            {isZh ? '什么是虚拟哲学家？' : 'What are Virtual Philosophers?'}
+          </h3>
+          <p className="text-indigo-700 leading-relaxed">
+            {isZh 
+              ? '在对话过程中，AI会根据您的回答内容，自动匹配相关的哲学家角色。这些哲学家会从各自的哲学体系出发，对您的观点进行点评、质疑或补充。通过与不同哲学家的思想碰撞，帮助您更深层次地审视自己的价值观和思维方式。'
+              : 'During the conversation, AI will automatically match relevant philosopher characters based on your responses. These philosophers will comment, question, or supplement your views from their respective philosophical systems, helping you examine your values and thinking patterns at a deeper level.'
+            }
+          </p>
+        </div>
 
-            {/* 哲学家列表 */}
-            <h3 className="text-lg font-bold text-white mb-4">
-              {isZh ? '哲学家列表' : 'Philosopher List'}
-            </h3>
-            
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {philosophers.map((p, i) => (
-                <div 
-                  key={i}
-                  className="bg-white/5 rounded-2xl p-4 border border-white/10 hover:bg-white/10 transition-colors"
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xl">{p.emoji}</span>
-                    <h4 className="font-bold text-white text-sm">{p.name}</h4>
-                  </div>
-                  <p className="text-xs text-slate-400 line-clamp-2">{p.desc}</p>
-                </div>
-              ))}
+        {/* 哲学家列表 - 网格布局 */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {philosophers.map((p, i) => (
+            <div 
+              key={i}
+              className="bg-white rounded-2xl p-4 border border-slate-200 hover:shadow-lg hover:border-indigo-200 transition-all"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-2xl">{p.emoji}</span>
+                <h4 className="font-bold text-slate-900 text-sm">{p.name}</h4>
+              </div>
+              <p className="text-xs text-slate-500 line-clamp-2">{p.desc}</p>
             </div>
+          ))}
+        </div>
 
-            {/* 底部说明 */}
-            <div className="mt-8 text-center">
-              <p className="text-slate-500 text-sm">
-                {isZh 
-                  ? '提示：哲学家是根据您回答中的关键词自动匹配的，每次可能会出现不同的哲学家。'
-                  : 'Note: Philosophers are automatically matched based on keywords in your responses.'
-                }
-              </p>
-            </div>
-          </>
-        )}
+        {/* 底部说明 */}
+        <div className="mt-8 text-center pb-10">
+          <p className="text-slate-400 text-sm">
+            {isZh 
+              ? '💡 提示：哲学家是根据您回答中的关键词自动匹配的，每次可能会出现不同的哲学家。'
+              : '💡 Note: Philosophers are automatically matched based on keywords in your responses.'
+            }
+          </p>
+        </div>
       </div>
     </div>
   );
