@@ -9,14 +9,44 @@
   <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
   <style>
-    :root { --primary-font: 'Inter', 'Noto Sans SC', sans-serif; }
-    body { font-family: var(--primary-font); background: #fafafa; color: #111; margin: 0; }
-    .font-serif { font-family: 'Playfair Display', serif; }
+    :root { 
+      --primary-font: 'Inter', 'Noto Sans SC', sans-serif;
+      --display-font: 'Playfair Display', 'Noto Sans SC', serif;
+      --primary-color: #1e293b;
+      --accent-color: #6366f1;
+      --bg-color: #f8fafc;
+    }
+    body { 
+      font-family: var(--primary-font); 
+      background: var(--bg-color); 
+      color: var(--primary-color); 
+      margin: 0; 
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .font-serif { font-family: var(--display-font); }
     .font-heiti { font-family: var(--primary-font); font-weight: 500; }
-    strong, b { font-weight: 700; color: #1d4ed8; background: linear-gradient(to bottom, transparent 65%, #dbeafe 65%); padding: 0 2px; }
+    strong, b { 
+      font-weight: 700; 
+      color: var(--accent-color); 
+      background: linear-gradient(to bottom, transparent 65%, #e0e7ff 65%); 
+      padding: 0 2px; 
+    }
     .export-container { background: white; }
+    /* 统一按钮风格 */
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: white;
+      font-weight: 600;
+      border: none;
+      transition: all 0.2s ease;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
   </style>
 
 <link rel="stylesheet" href="/index.css">
@@ -33,7 +63,7 @@
   }
 }
 </script>
-  <script type="module" crossorigin src="/assets/index-DK2IYOU0.js"></script>
+  <script type="module" crossorigin src="/assets/index-LxA9zZ4z.js"></script>
 </head>
 <body>
   <div id="root"></div>

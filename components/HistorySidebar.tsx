@@ -35,22 +35,32 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   // 加载历史记录
   useEffect(() => {
     const loadHistory = async () => {
-      // 1. 尝试从后端加载
+      const savedUser = localStorage.getItem('user');
+      // 优先使用已登录用户，其次使用保存的guest ID
+      let userId = 'guest';
+      if (savedUser) {
+        try {
+          userId = JSON.parse(savedUser).username || 'guest';
+        } catch (e) {}
+      }
+      // 如果是游客，检查是否有保存的guestUserId
+      if (userId === 'guest') {
+        userId = localStorage.getItem('guestUserId') || 'guest';
+      }
+      
+      // 1. 优先从后端加载（使用新的用户历史API）
       try {
-        const savedUser = localStorage.getItem('user');
-        const userId = savedUser ? JSON.parse(savedUser).username : 'guest';
-        const res = await philosophyApi.getHistory(userId);
+        const res = await philosophyApi.getUserHistories(userId);
         if (res && res.history && res.history.length > 0) {
           // 转换后端数据格式为前端格式
           const backendHistory: ChatHistory[] = res.history.map((h: any) => ({
             id: h.sessionId,
-            mode: h.mode,
+            mode: h.mode as DiscoveryMode,
             modeLabel: h.mode,
-            questionCount: h.messages?.filter((m: any) => m.role === 'user').length || 0,
-            lastMessage: h.messages?.[h.messages.length - 1]?.content?.slice(0, 50) || '',
+            questionCount: h.questionCount || 0,
+            lastMessage: h.lastMessage || '',
             timestamp: new Date(h.createdAt).getTime(),
-            result: h.result,
-            isComplete: !!h.result
+            isComplete: h.hasReport || false
           }));
           setHistory(backendHistory.sort((a: ChatHistory, b: ChatHistory) => b.timestamp - a.timestamp));
           return;

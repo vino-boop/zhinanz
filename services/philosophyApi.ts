@@ -37,6 +37,9 @@ export interface Question {
   usageCount: number;
   status: string;
   createdAt: string;
+  question_group?: string;   // 问题组名称
+  question_prompt?: string; // 完整的问题提示词
+  question_order?: number;   // 组内排序
 }
 
 export interface JudgeConfig {
@@ -80,7 +83,7 @@ export const getRandomQuestion = () =>
 
 // 获取审判机配置
 export const getJudgeConfig = () =>
-  fetchApi<JudgeConfig>('/api/philosophy/judge');
+  fetchApi<JudgeConfig>('/api/philosophy/judge-config');
 
 // 更新审判机配置
 export const updateJudgeConfig = (config: JudgeConfig) =>
@@ -109,7 +112,7 @@ export const LOCAL_PHILOSOPHERS: Philosopher[] = [
 ];
 
 export const LOCAL_QUESTIONS: Question[] = [
-  { id: 1, content: '人生的意义是什么？', philosopher: '尼采', category: '人生', usageCount: 0, status: 'active', createdAt: '' },
+  { id: 1, content: '人生的意义是什么？', philosopher: '尼采', category: '人生', usageCount: 0, status: 'active', createdAt: '', question_group: '生命意义', question_prompt: '请深入思考并回答：人生的意义是什么？', question_order: 1 },
 ];
 
 // 带回退的获取函数

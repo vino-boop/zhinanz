@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Message, DiscoveryResult, AppState, Language, DiscoveryMode, DiscoveryIntensity, AppSettings, ApiProvider } from './types';
+import { Message, DiscoveryResult, AppState, Language, DiscoveryMode, DiscoveryIntensity, AppSettings, ApiProvider, Dimension } from './types';
 import { streamJudgeResponse, streamPhilosopherResponse, generateFinalAnalysis, clearSession } from './services/aiService';
 import { philosophyApi, authApi } from './services/apiClient';
 import { ChatBubble } from './components/ChatBubble';
@@ -162,6 +162,7 @@ const MODE_DEFINITIONS = [
 // Replicate list for infinite scroll illusion
 const SLOT_ITEMS = [...MODE_DEFINITIONS, ...MODE_DEFINITIONS, ...MODE_DEFINITIONS, ...MODE_DEFINITIONS, ...MODE_DEFINITIONS, ...MODE_DEFINITIONS];
 const ITEM_HEIGHT = 160; // px
+const SLOT_OFFSET = -25; // 居中偏移量，让icon和文字在中间
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>('auth');
@@ -186,6 +187,7 @@ const App: React.FC = () => {
   const [showSidebar, setShowSidebar] = useState(true);
   const [currentHistoryId, setCurrentHistoryId] = useState<string | undefined>();
   const [isSpinning, setIsSpinning] = useState(false);
+  const [sessionId, setSessionId] = useState<string>(''); // 用于追踪当前对话session
   const [isSlotRevealed, setIsSlotRevealed] = useState(false); // New state to control slot machine visibility
   const [drawnMode, setDrawnMode] = useState<DiscoveryMode | null>(null);
   const slotRef = useRef<HTMLDivElement>(null);
@@ -314,7 +316,7 @@ const App: React.FC = () => {
     if (slotRef.current) {
       // Reset position instantly
       slotRef.current.style.transition = 'none';
-      slotRef.current.style.transform = 'translateY(0px)';
+      slotRef.current.style.transform = `translateY(${SLOT_OFFSET}px)`;
       
       // Force reflow
       void slotRef.current.offsetHeight;
@@ -323,7 +325,7 @@ const App: React.FC = () => {
       setTimeout(() => {
         if (slotRef.current) {
             slotRef.current.style.transition = 'transform 3s cubic-bezier(0.1, 0.9, 0.2, 1)'; // Ease out
-            slotRef.current.style.transform = `translateY(-${finalIndex * ITEM_HEIGHT}px)`;
+            slotRef.current.style.transform = `translateY(-${finalIndex * ITEM_HEIGHT + SLOT_OFFSET}px)`;
         }
       }, 50);
 
@@ -338,6 +340,7 @@ const App: React.FC = () => {
   const startJourney = async (m: DiscoveryMode, i: DiscoveryIntensity) => {
     setIsLoading(true); setError(null);
     setDialoguePhase('judge'); // 开始审判机阶段
+    setSessionId(`session-${Date.now()}`); // 创建新的session ID
     
     try {
       const pool = INITIAL_QUESTION_POOL[m];
@@ -477,6 +480,36 @@ const App: React.FC = () => {
         }
         
         console.log('哲学家回复完成');
+        
+        // 保存对话历史到数据库
+        try {
+          // 获取本轮对话的相关消息
+          const judgeMsgs = messages.filter(m => m.speaker === 'Judge' || m.speaker === '审判机');
+          const userMsgs = messages.filter(m => m.role === 'user');
+          const philosopherMsgs = messages.filter(m => m.speaker && m.speaker.startsWith('Persona:'));
+          
+          const lastJudgeQuestion = judgeMsgs.length > 0 ? judgeMsgs[judgeMsgs.length - 1].content : '';
+          const lastUserAnswer = userMsgs.length > 0 ? userMsgs[userMsgs.length - 1].content : textToSend;
+          const lastJudgeResponse = ''; // 审判机的回应
+          const lastPhilosopherResponse = philosopherMsgs.length > 0 
+            ? philosopherMsgs.map(m => m.content).join('\n\n') 
+            : '';
+          
+          await philosophyApi.saveConversation({
+            user_id: user?.username || 'guest',
+            session_id: sessionId,
+            mode: mode || '',
+            round: questionCount + 1,
+            judge_question: lastJudgeQuestion,
+            user_answer: lastUserAnswer,
+            judge_response: lastJudgeResponse,
+            philosopher_response: lastPhilosopherResponse
+          });
+          console.log('对话历史已保存到数据库');
+        } catch (saveErr) {
+          console.error('保存对话历史失败:', saveErr);
+        }
+        
       } catch (philError: any) {
         console.error('哲学家回复错误:', philError);
         setError(philError.message || '哲学家回复失败');
@@ -543,12 +576,16 @@ const App: React.FC = () => {
       const res = await generateFinalAnalysis([{ id: 's', role: 'user', content: 'START', timestamp: 0 }, ...messages], mode, settings);
       setResult(res); setState('result');
       
-      // 保存到后端历史记录
-      const userId = user?.username || 'guest';
-      const sessionId = `session-${Date.now()}`;
+      // 保存到后端历史记录 - 使用已有的sessionId
+      const userId = user?.username || localStorage.getItem('guestUserId') || `guest_${Date.now()}`;
+      // 保存guest用户ID到localStorage
+      if (!user?.username && !localStorage.getItem('guestUserId')) {
+        localStorage.setItem('guestUserId', userId);
+      }
+      const currentSessionId = sessionId || `session-${Date.now()}`;
       const historyData = {
         userId,
-        sessionId,
+        sessionId: currentSessionId,
         messages: [{ id: 's', role: 'user', content: 'START', timestamp: 0 }, ...messages],
         mode,
         result: res, // 保存分析报告
@@ -556,11 +593,39 @@ const App: React.FC = () => {
       };
       
       // 保存到服务器
-      philosophyApi.saveHistory(userId, sessionId, historyData.messages, mode).then(() => {
-        console.log('历史记录已保存到服务器');
+      philosophyApi.saveHistory(userId, currentSessionId, historyData.messages, mode).then(() => {
+        console.log('历史记录已保存到服务器, userId:', userId, 'sessionId:', currentSessionId);
       }).catch(err => {
         console.error('保存历史失败:', err);
       });
+      
+      // 保存分析报告到 ik_analysis_reports 表
+      try {
+        // 转换 dimensions 数组为对象
+        const dimensionsObj: Record<string, number> = {};
+        if (res.dimensions && Array.isArray(res.dimensions)) {
+          res.dimensions.forEach((d: Dimension) => {
+            dimensionsObj[d.label] = d.value;
+          });
+        }
+        
+        await philosophyApi.saveReport({
+          user_id: userId,
+          session_id: currentSessionId,
+          mode: mode || '',
+          title: res.title || '',
+          summary: res.summary || '',
+          philosophical_trend: res.philosophicalTrend || '',
+          key_insights: res.keyInsights || [],
+          suggested_paths: res.suggestedPaths || [],
+          motto: res.motto || '',
+          dimensions: dimensionsObj,
+          raw_data: JSON.stringify(res)
+        });
+        console.log('分析报告已保存到数据库');
+      } catch (reportErr) {
+        console.error('保存分析报告失败:', reportErr);
+      }
       
       // 同时保存到 localStorage（用于侧边栏显示）
       const { saveToHistory } = await import('./components/HistorySidebar');
@@ -830,9 +895,8 @@ const App: React.FC = () => {
           intensity=""
           questionCount={0}
           currentHistoryId={undefined}
-          onStartNew={() => {}}
+          onStartNew={reset}
           onOpenSettings={() => setShowSettings(true)}
-          onOpenPhilosopherIntro={() => setShowPhilosopherIntro(true)}
           onOpenAllModes={() => setShowAllModes(true)}
           onReset={() => {}}
           onChangeLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
@@ -1171,9 +1235,8 @@ const App: React.FC = () => {
         intensity={intensity}
         questionCount={questionCount}
         currentHistoryId={currentHistoryId}
-        onStartNew={() => { /* 开始新对话 */ }}
+        onStartNew={reset}
         onOpenSettings={() => setShowSettings(true)}
-        onOpenPhilosopherIntro={() => setShowPhilosopherIntro(true)}
         onOpenAllModes={() => setShowAllModes(true)}
         onReset={reset}
         onChangeLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Language, DiscoveryMode, DiscoveryResult } from '../types';
-import { X, Sparkles, Settings, ChevronLeft, Languages, LogOut, Plus, MessageCircle, LayoutGrid } from 'lucide-react';
+import { X, Sparkles, Settings, ChevronLeft, ChevronRight, Languages, LogOut, Plus, MessageCircle, LayoutGrid } from 'lucide-react';
 
 interface ChatHistory {
   id: string;
@@ -24,7 +24,6 @@ interface ChatSidebarProps {
   currentHistoryId?: string;
   onStartNew: () => void;
   onOpenSettings: () => void;
-  onOpenPhilosopherIntro: () => void;
   onOpenAllModes: () => void;
   onReset: () => void;
   onChangeLang: () => void;
@@ -41,7 +40,6 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   currentHistoryId,
   onStartNew,
   onOpenSettings,
-  onOpenPhilosopherIntro,
   onOpenAllModes,
   onReset,
   onChangeLang
@@ -95,40 +93,80 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     border: '#475569',   // slate-600
   };
 
-  if (!isOpen) {
-    return (
-      <button 
-        onClick={onOpen}
-        className="fixed top-4 left-4 z-50 p-3 shadow-lg rounded-xl text-white transition-all"
-        style={{ background: `linear-gradient(135deg, ${slotMachineColors.accent} 0%, #4f46e5 100%)` }}
-      >
-        <Menu size={20} />
-      </button>
-    );
-  }
-
   return (
-    <div className="fixed left-0 top-0 h-full w-72 z-50 flex flex-col" style={{ background: slotMachineColors.bg }}>
-      {/* 头部 - 关闭按钮 */}
-      <div className="flex justify-end p-4">
+    <div 
+      className={`fixed left-0 top-0 h-full z-50 flex flex-col transition-all duration-300 ease-in-out ${
+        isOpen ? 'w-72' : 'w-16'
+      }`}
+      style={{ 
+        background: slotMachineColors.bg,
+      }}
+    >
+      {/* 收起模式：只显示Logo和图标 */}
+      {!isOpen ? (
+        <div className="flex flex-col items-center py-4 h-full">
+          {/* Logo - 点击新对话 */}
+          <button 
+            onClick={() => { onStartNew(); }}
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold"
+            style={{ background: `linear-gradient(135deg, ${slotMachineColors.accent} 0%, #4f46e5 100%)` }}
+            title={isZh ? '新对话' : 'New Chat'}
+          >
+            <Sparkles size={20} />
+          </button>
+          
+          {/* 底部图标区域 */}
+          <div className="mt-auto flex flex-col gap-3 pb-4">
+            {/* 查看全部问题 */}
+            <button 
+              onClick={() => { onOpenAllModes(); }}
+              className="p-2.5 rounded-xl hover:bg-white/10 transition-all"
+              style={{ color: slotMachineColors.text }}
+              title={isZh ? '查看全部问题' : 'View All Themes'}
+            >
+              <LayoutGrid size={20} />
+            </button>
+            
+            {/* 设置 */}
+            <button 
+              onClick={() => { onOpenSettings(); }}
+              className="p-2.5 rounded-xl hover:bg-white/10 transition-all"
+              style={{ color: slotMachineColors.text }}
+              title={isZh ? '设置' : 'Settings'}
+            >
+              <Settings size={20} />
+            </button>
+            
+            {/* 展开按钮 */}
+            <button 
+              onClick={onOpen}
+              className="p-2.5 rounded-xl hover:bg-white/10 transition-all"
+              style={{ color: slotMachineColors.text }}
+              title={isZh ? '展开' : 'Expand'}
+            >
+              <ChevronRight size={20} />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+      {/* 展开模式：完整侧边栏 */}
+      {/* 头部 - 新对话按钮和收起按钮同一排 */}
+      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
         <button 
-          onClick={onOpen}
-          className="p-2 rounded-lg transition-colors"
-          style={{ background: slotMachineColors.card, color: slotMachineColors.text }}
-        >
-          <X size={18} />
-        </button>
-      </div>
-      
-      {/* 头部按钮 */}
-      <div className="px-4 pb-4">
-        <button 
-          onClick={onOpen}
-          className="w-full flex items-center justify-center gap-2 p-3 rounded-xl transition-colors text-white font-medium"
+          onClick={() => { onStartNew(); }}
+          className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl transition-colors text-white font-medium"
           style={{ background: `linear-gradient(135deg, ${slotMachineColors.accent} 0%, #4f46e5 100%)` }}
         >
           <Plus size={18} />
           <span className="text-sm">{isZh ? '新对话' : 'New Chat'}</span>
+        </button>
+        <button 
+          onClick={onOpen}
+          className="p-2 rounded-lg transition-all hover:scale-110 flex-shrink-0"
+          style={{ background: slotMachineColors.card, color: slotMachineColors.text }}
+        >
+          <ChevronLeft size={18} />
         </button>
       </div>
 
@@ -175,15 +213,6 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         {/* 底部菜单 - 统一颜色 */}
         <div className="p-4 space-y-2">
           <button 
-            onClick={() => { onOpenPhilosopherIntro(); }}
-            className="w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-sm font-medium"
-            style={{ background: slotMachineColors.card, color: slotMachineColors.text }}
-          >
-            <Sparkles size={16} style={{ color: slotMachineColors.accent }} />
-            <span>{isZh ? '虚拟哲学家' : 'Philosophers'}</span>
-          </button>
-
-          <button 
             onClick={() => { onOpenAllModes(); }}
             className="w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-sm font-medium"
             style={{ background: slotMachineColors.card, color: slotMachineColors.text }}
@@ -201,6 +230,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             <span>{isZh ? '设置' : 'Settings'}</span>
           </button>
         </div>
+        </>
+      )}
       </div>
   );
 };

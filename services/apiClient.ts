@@ -34,6 +34,7 @@ export const authApi = {
 // 哲思模块
 export const philosophyApi = {
   getHistory: (userId: string) => fetchApi<{ history: any[] }>(`/philosophy/history/${userId}`),
+  getUserHistories: (userId: string) => fetchApi<{ history: any[]; reports: any[] }>(`/philosophy/user-histories/${userId}`),
   saveHistory: (userId: string, sessionId: string, messages: any[], mode: string, result?: any) => 
     fetchApi<{ success: boolean }>('/philosophy/history', {
       method: 'POST',
@@ -43,6 +44,49 @@ export const philosophyApi = {
   getQuestions: () => fetchApi('/philosophy/questions'),
   getPhilosopherPrompts: () => fetchApi('/philosophy/prompts/philosopher'),
   getJudgePrompt: () => fetchApi('/philosophy/prompts/judge'),
+  
+  // 对话历史详细记录
+  saveConversation: (data: {
+    user_id: string;
+    session_id: string;
+    mode: string;
+    round: number;
+    judge_question: string;
+    user_answer: string;
+    judge_response: string;
+    philosopher_response: string;
+  }) => fetchApi<{ success: boolean; id: number }>('/conversations', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  
+  getConversations: (userId: string, sessionId?: string) => {
+    const params = sessionId ? `?user_id=${userId}&session_id=${sessionId}` : `?user_id=${userId}`;
+    return fetchApi<{ conversations: any[] }>(`/conversations${params}`);
+  },
+  
+  // 分析报告
+  saveReport: (data: {
+    user_id: string;
+    session_id: string;
+    mode: string;
+    title: string;
+    summary: string;
+    philosophical_trend: string;
+    key_insights: string[];
+    suggested_paths: string[];
+    motto: string;
+    dimensions: Record<string, number>;
+    raw_data: string;
+  }) => fetchApi<{ success: boolean; id: number }>('/reports', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  
+  getReports: (userId: string, sessionId?: string) => {
+    const params = sessionId ? `?user_id=${userId}&session_id=${sessionId}` : `?user_id=${userId}`;
+    return fetchApi<{ reports: any[] }>(`/reports${params}`);
+  },
 };
 
 // 运何模块
