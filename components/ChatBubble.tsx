@@ -244,9 +244,10 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
               {/* 引号装饰 */}
               <div className="absolute top-0 left-2 text-4xl text-purple-200 font-serif leading-none select-none">"</div>
               
-              {/* 提取主要内容和动作描写 */}
+              {/* 提取主要内容和动作描写 - 支持中文和英文括号 */}
               {(() => {
-                const actionMatch = rawContent.match(/（[^）]+）$/);
+                // 匹配末尾的中文括号或英文括号
+                const actionMatch = rawContent.match(/[（\(][^）\)]+[）\)]$/);
                 if (actionMatch) {
                   const mainContent = rawContent.slice(0, actionMatch.index).trim();
                   return (

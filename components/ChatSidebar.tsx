@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Language, DiscoveryMode, DiscoveryResult } from '../types';
-import { X, Sparkles, Settings, ChevronLeft, ChevronRight, Languages, LogOut, Plus, MessageCircle, LayoutGrid } from 'lucide-react';
+import { X, Sparkles, Settings, ChevronLeft, ChevronRight, Languages, LogOut, Plus, MessageCircle, LayoutGrid, Zap, GraduationCap } from 'lucide-react';
 
 interface ChatHistory {
   id: string;
@@ -22,11 +22,17 @@ interface ChatSidebarProps {
   intensity: string;
   questionCount: number;
   currentHistoryId?: string;
+  user?: {id: number; username: string; email: string; role: string} | null;
+  userTokens?: number;
   onStartNew: () => void;
   onOpenSettings: () => void;
   onOpenAllModes: () => void;
   onReset: () => void;
   onChangeLang: () => void;
+  historyRefreshKey?: number;
+  onSelectHistory?: (history: ChatHistory) => void;
+  onOpenVIP?: () => void;
+  onOpenPhilosophers?: () => void;
 }
 
 export const ChatSidebar: React.FC<ChatSidebarProps> = ({ 
@@ -38,25 +44,93 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   intensity,
   questionCount,
   currentHistoryId,
+  user,
   onStartNew,
   onOpenSettings,
   onOpenAllModes,
   onReset,
-  onChangeLang
+  onChangeLang,
+  historyRefreshKey,
+  onSelectHistory,
+  userTokens = 0,
+  onOpenVIP,
+  onOpenPhilosophers,
 }) => {
   const isZh = language === 'zh';
   const [history, setHistory] = useState<ChatHistory[]>([]);
+  const [lastRefresh, setLastRefresh] = useState<number>(0);
 
-  // 加载历史记录
+  // 加载历史记录 - 优先从数据库加载（登录用户），否则从本地存储
   useEffect(() => {
-    const saved = localStorage.getItem('explorer_compass_history');
-    if (saved && isOpen) {
-      try {
-        const parsed = JSON.parse(saved);
-        setHistory(parsed.sort((a: ChatHistory, b: ChatHistory) => b.timestamp - a.timestamp).slice(0, 30));
-      } catch (e) {}
-    }
-  }, [isOpen]);
+    const loadHistory = async () => {
+      if (!isOpen) return;
+  // 获取模式的中文名称
+  const getModeLabelZh = (mode: string) => {
+    const labels: Record<string, string> = {
+      'LIFE_MEANING': '生命意义',
+      'JUSTICE': '社会正义',
+      'SELF_IDENTITY': '自我认同',
+      'FREE_WILL': '自由意志',
+      'SIMULATION': '虚拟现实',
+      'OTHER_MINDS': '他心问题',
+      'LANGUAGE': '语言哲学',
+      'SCIENCE': '科学哲学',
+    };
+    return isZh ? (labels[mode] || mode) : mode;
+  };
+      
+      // 如果用户已登录，从数据库加载
+      if (user && user.id) {
+        try {
+          const res = await fetch(`http://42.193.225.114:3001/api/philosophy/user-histories/${user.id}`);
+          const data = await res.json();
+          if (data.history && data.history.length > 0) {
+            // 转换数据库历史为本地格式
+            const dbHistory: ChatHistory[] = data.history.map((h: any) => ({
+              id: h.session_id,
+              mode: h.mode,
+              modeLabel: getModeLabelZh(h.mode),
+              questionCount: h.question_count || 0,
+              lastMessage: h.answer_content?.slice(0, 50) || '',
+              timestamp: new Date(h.create_time).getTime(),
+              result: null,
+              isComplete: false
+            }));
+            // 合并报告
+            if (data.reports && data.reports.length > 0) {
+              const reportHistory: ChatHistory[] = data.reports.map((r: any) => ({
+                id: r.session_id,
+                mode: r.mode,
+                modeLabel: getModeLabelZh(r.mode),
+                questionCount: 0,
+                lastMessage: r.title?.slice(0, 50) || '',
+                timestamp: new Date(r.create_time).getTime(),
+                result: r,
+                isComplete: true
+              }));
+              setHistory([...reportHistory, ...dbHistory].sort((a, b) => b.timestamp - a.timestamp).slice(0, 30));
+              return;
+            }
+            setHistory(dbHistory.sort((a, b) => b.timestamp - a.timestamp).slice(0, 30));
+            return;
+          }
+        } catch (e) {
+          console.error('加载数据库历史失败:', e);
+        }
+      }
+      
+      // 否则从本地存储加载
+      const saved = localStorage.getItem('explorer_compass_history');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setHistory(parsed.sort((a: ChatHistory, b: ChatHistory) => b.timestamp - a.timestamp).slice(0, 30));
+        } catch (e) {}
+      }
+    };
+    
+    loadHistory();
+  }, [isOpen, lastRefresh, historyRefreshKey, user, language]);
 
   // 删除单条记录
   const deleteHistory = (id: string, e: React.MouseEvent) => {
@@ -105,18 +179,28 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       {/* 收起模式：只显示Logo和图标 */}
       {!isOpen ? (
         <div className="flex flex-col items-center py-4 h-full">
-          {/* Logo - 点击新对话 */}
+          {/* Logo - 点击展开侧边栏 */}
           <button 
-            onClick={() => { onStartNew(); }}
+            onClick={() => { onOpen(); }}
             className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold"
             style={{ background: `linear-gradient(135deg, ${slotMachineColors.accent} 0%, #4f46e5 100%)` }}
-            title={isZh ? '新对话' : 'New Chat'}
+            title={isZh ? '展开菜单' : 'Open Menu'}
           >
             <Sparkles size={20} />
           </button>
           
           {/* 底部图标区域 */}
           <div className="mt-auto flex flex-col gap-3 pb-4">
+            {/* 查看哲学家 */}
+            <button 
+              onClick={() => { onOpenPhilosophers?.(); }}
+              className="p-2.5 rounded-xl hover:bg-white/10 transition-all"
+              style={{ color: slotMachineColors.text }}
+              title={isZh ? '查看哲学家' : 'View Philosophers'}
+            >
+              <GraduationCap size={20} />
+            </button>
+            
             {/* 查看全部问题 */}
             <button 
               onClick={() => { onOpenAllModes(); }}
@@ -190,9 +274,22 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     currentHistoryId === h.id ? '' : ''
                   }`}
                   style={{ background: currentHistoryId === h.id ? slotMachineColors.card : 'transparent' }}
+                  onClick={() => onSelectHistory?.(h)}
                 >
                   <div className="flex-1 min-w-0 mr-2">
-                    <p className="text-sm truncate" style={{ color: slotMachineColors.text }}>{h.modeLabel}</p>
+                    <p className="text-sm truncate" style={{ color: slotMachineColors.text }}>
+                      {isZh 
+                        ? (h.mode === 'LIFE_MEANING' ? '生命意义' 
+                          : h.mode === 'JUSTICE' ? '社会正义'
+                          : h.mode === 'SELF_IDENTITY' ? '自我认同'
+                          : h.mode === 'FREE_WILL' ? '自由意志'
+                          : h.mode === 'SIMULATION' ? '虚拟与真实'
+                          : h.mode === 'OTHER_MINDS' ? '他心问题'
+                          : h.mode === 'LANGUAGE' ? '语言与意义'
+                          : h.mode === 'SCIENCE' ? '科学哲学'
+                          : h.modeLabel)
+                        : h.modeLabel}
+                    </p>
                     <p className="text-xs" style={{ color: slotMachineColors.textMuted }}>
                       {h.questionCount} {isZh ? '题' : 'Q'} • {formatTime(h.timestamp)}
                     </p>
@@ -212,6 +309,17 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
         {/* 底部菜单 - 统一颜色 */}
         <div className="p-4 space-y-2">
+          {/* 先令展示 - 点击可购买会员 */}
+          {user && userTokens !== undefined && (
+            <button 
+              onClick={() => onOpenVIP?.()}
+              className="w-full flex items-center justify-center gap-2 p-3 rounded-xl transition-colors text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700"
+            >
+              <Zap size={16} />
+              <span>{userTokens} {isZh ? '先令' : 'Shi ling'}</span>
+            </button>
+          )}
+          
           <button 
             onClick={() => { onOpenAllModes(); }}
             className="w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-sm font-medium"
@@ -219,6 +327,15 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           >
             <LayoutGrid size={16} style={{ color: slotMachineColors.accent }} />
             <span>{isZh ? '查看全部问题' : 'View All Themes'}</span>
+          </button>
+
+          <button 
+            onClick={() => { onOpenPhilosophers?.(); }}
+            className="w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-sm font-medium"
+            style={{ background: slotMachineColors.card, color: slotMachineColors.text }}
+          >
+            <GraduationCap size={16} style={{ color: slotMachineColors.accent }} />
+            <span>{isZh ? '查看哲学家' : 'View Philosophers'}</span>
           </button>
 
           <button 

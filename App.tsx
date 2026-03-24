@@ -8,12 +8,15 @@ import { ProgressBar } from './components/ProgressBar';
 import { PhilosopherIntro } from './components/PhilosopherIntro';
 import { HistorySidebar, saveToHistory } from './components/HistorySidebar';
 import { ChatSidebar } from './components/ChatSidebar';
+import { PhilosophersLibrary } from './components/PhilosophersLibrary';
+import { PhilosopherTopicSelect } from './components/PhilosopherTopicSelect';
 import { INITIAL_QUESTION_POOL } from './constants/questions';
 import { 
   Compass, Send, RefreshCw, Sparkles, ArrowRight, Quote, Languages, Scale, 
   ScrollText, FileImage, Layers, Zap, Dna, Target, Timer, Infinity as InfinityIcon, AlertCircle, Settings, X, Key,
   BrainCircuit, Fingerprint, Cpu, Network, MessageSquare, FlaskConical, Binary, Eye,
-  Dices, LayoutGrid, RotateCcw, User, Lock, Mail, Github, Menu, History, ChevronRight
+  Dices, LayoutGrid, RotateCcw, User, Lock, Mail, Github, Menu, History, ChevronRight, LogOut, LogIn,
+  Smartphone, Shield, Crown, GraduationCap, Users
 } from 'lucide-react';
 
 declare const html2canvas: any;
@@ -69,17 +72,32 @@ const i18n = {
     errorQuota: "连接中断。请检查网络或 API 额度。",
     retryBtn: "重新发送",
     settingsTitle: "设置",
+    viewPhilosophers: "查看哲学家",
     providerLabel: "智能引擎",
     apiKeyPlaceholder: "输入您的 API Key",
     saveBtn: "确认保存",
     customKeyTip: "选择引擎并配置 Key。DeepSeek 提供更犀利的逻辑，Gemini 提供更广博的视野。",
     loginTitle: "登录探索者",
     loginDesc: "开启您的哲学探索之旅",
-    usernamePlaceholder: "用户名 / 邮箱",
+    phonePlaceholder: "手机号",
     passwordPlaceholder: "密码",
-    loginBtn: "登录 / 注册",
+    verifyCodePlaceholder: "验证码",
+    loginBtn: "登录",
+    registerBtn: "注册",
+    sendCodeBtn: "发送验证码",
     wechatLogin: "微信登录",
     guestLogin: "游客访问",
+    accountInfo: "账号信息",
+    switchAccount: "切换账号",
+    logout: "退出登录",
+    tokens: "先令",
+    editProfile: "修改资料",
+    saveProfile: "保存",
+    cancel: "取消",
+    newTopicCost: "新话题",
+    answerCost: "每次回答",
+    summaryCost: "总结",
+    notEnoughTokens: "先令不足",
     fateAwaits: "命运降临",
     tapToReveal: "点击下方按钮揭晓",
     menu: "菜单"
@@ -131,17 +149,32 @@ const i18n = {
     errorQuota: "Connection failed. Check API or network.",
     retryBtn: "Retry",
     settingsTitle: "Settings",
+    viewPhilosophers: "View Philosophers",
     providerLabel: "AI Engine",
     apiKeyPlaceholder: "Enter your API Key",
     saveBtn: "Save Changes",
     customKeyTip: "Select your engine. DeepSeek for logic, Gemini for breadth.",
     loginTitle: "Login",
     loginDesc: "Begin your philosophical odyssey",
-    usernamePlaceholder: "Username / Email",
+    phonePlaceholder: "Phone Number",
     passwordPlaceholder: "Password",
-    loginBtn: "Login / Register",
+    verifyCodePlaceholder: "Verify Code",
+    loginBtn: "Login",
+    registerBtn: "Register",
+    sendCodeBtn: "Send Code",
     wechatLogin: "WeChat",
     guestLogin: "Guest Mode",
+    accountInfo: "Account Info",
+    switchAccount: "Switch Account",
+    logout: "Logout",
+    tokens: "Shi ling",
+    editProfile: "Edit Profile",
+    saveProfile: "Save",
+    cancel: "Cancel",
+    newTopicCost: "New Topic",
+    answerCost: "Per Answer",
+    summaryCost: "Summary",
+    notEnoughTokens: "Insufficient Shi ling",
     fateAwaits: "Fate Awaits",
     tapToReveal: "Tap button to reveal",
     menu: "Menu"
@@ -166,7 +199,7 @@ const SLOT_OFFSET = -25; // 居中偏移量，让icon和文字在中间
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>('auth');
-  const [user, setUser] = useState<{id: number; username: string; email: string; role: string} | null>(null);
+  const [user, setUser] = useState<{id: number; username: string; phone?: string; tokens?: number; role: string} | null>(null);
   const [mode, setMode] = useState<DiscoveryMode | null>(null);
   const [intensity, setIntensity] = useState<DiscoveryIntensity>('QUICK');
   const [lang, setLang] = useState<Language>('zh');
@@ -185,12 +218,22 @@ const App: React.FC = () => {
   const [showAllModes, setShowAllModes] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [showPhilosophers, setShowPhilosophers] = useState(false); // 哲学家库弹窗
+  const [selectedPhilosopher, setSelectedPhilosopher] = useState<{id: number; name: string; display_name_zh: string; display_name_en: string; era?: string; description?: string; prompt?: string; keywords?: string | string[]; modes?: string} | null>(null); // 选中的哲学家
+  const [philosopherTopic, setPhilosopherTopic] = useState<string | null>(null); // 哲学家对话的话题
+  const [philosopherMode, setPhilosopherMode] = useState(false); // 是否是哲学家一对一模式
   const [currentHistoryId, setCurrentHistoryId] = useState<string | undefined>();
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [sessionId, setSessionId] = useState<string>(''); // 用于追踪当前对话session
-  const [isSlotRevealed, setIsSlotRevealed] = useState(false); // New state to control slot machine visibility
+  const [sessionId, setSessionId] = useState<string>('');
+  const [isSlotRevealed, setIsSlotRevealed] = useState(false);
   const [drawnMode, setDrawnMode] = useState<DiscoveryMode | null>(null);
   const slotRef = useRef<HTMLDivElement>(null);
+  
+  // Token 系统状态
+  const [userTokens, setUserTokens] = useState<number>(100); // 用户先令
+  const [showEditProfile, setShowEditProfile] = useState(false); // 修改资料弹窗
+  const [showVIP, setShowVIP] = useState(false); // 会员购买弹窗
 
   // Two-phase dialogue state
   const [dialoguePhase, setDialoguePhase] = useState<'judge' | 'philosopher' | 'waiting'>('waiting');
@@ -215,9 +258,12 @@ const App: React.FC = () => {
   });
 
   // 登录表单状态
-  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPhone, setLoginPhone] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [verifyCode, setVerifyCode] = useState('');
   const [isRegistering, setIsRegistering] = useState(false); // 切换登录/注册
+  const [codeSent, setCodeSent] = useState(false); // 验证码发送状态
+  const [countdown, setCountdown] = useState(0); // 倒计时
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -245,16 +291,39 @@ const App: React.FC = () => {
     setIsSlotRevealed(false);
     setDialoguePhase('waiting');
     setLastJudgeContent('');
+    // 重置哲学家模式状态
+    setPhilosopherMode(false);
+    setSelectedPhilosopher(null);
+    setPhilosopherTopic(null);
+  };
+
+  // 处理点击历史记录 - 加载历史对话或报告
+  const handleSelectHistory = (history: any) => {
+    console.log('选中历史记录:', history);
+    if (history.isComplete && history.result) {
+      // 有完整报告 - 跳转到报告页面
+      setResult(history.result);
+      setMode(history.mode);
+      setState('result');
+    } else {
+      // 只有对话记录 - 跳转到对话页面（需要后端支持加载对话内容）
+      // TODO: 从数据库加载对话内容
+      setMode(history.mode);
+      setState('chatting');
+    }
+    setCurrentHistoryId(history.id);
+    setShowSidebar(false);
   };
 
   // 登录处理
-  const handleLogin = async (username: string, password: string) => {
+  const handleLogin = async (phone: string, password: string) => {
     try {
-      const res: any = await authApi.login(username, password);
+      const res: any = await authApi.login(phone, password);
       if (res.success) {
         setUser(res.user);
+        // 从返回数据中获取 token
+        setUserTokens(res.user?.tokens || res.user?.token_balance || 100);
         setState('landing');
-        // 保存用户信息到 localStorage
         localStorage.setItem('user', JSON.stringify(res.user));
       } else {
         alert(res.message || '登录失败');
@@ -265,11 +334,14 @@ const App: React.FC = () => {
   };
 
   // 注册处理
-  const handleRegister = async (username: string, password: string, email?: string) => {
+  const handleRegister = async (phone: string, password: string, code: string) => {
     try {
-      const res: any = await authApi.register(username, password, email);
+      // TODO: 验证码校验
+      const res: any = await authApi.register(phone, password, phone); // 手机号作为账号
       if (res.success) {
         setUser(res.user);
+        // 新用户默认 100 token
+        setUserTokens(100);
         setState('landing');
         localStorage.setItem('user', JSON.stringify(res.user));
       } else {
@@ -278,6 +350,50 @@ const App: React.FC = () => {
     } catch (e: any) {
       alert(e.message || '注册失败，请检查网络');
     }
+  };
+
+  // 游客登录处理 - 录入后端，但不送先令
+  const handleGuestLogin = async () => {
+    try {
+      const guestId = `guest_${Date.now()}`;
+      const res: any = await authApi.register(guestId, '', ''); // 用 guest_时间戳 作为用户名，密码为空
+      if (res.success) {
+        setUser(res.user);
+        // 游客默认 0 token（不送免费先令）
+        setUserTokens(0);
+        setState('landing');
+        localStorage.setItem('user', JSON.stringify(res.user));
+      } else {
+        // 如果注册失败（比如用户名已存在），尝试直接登录
+        console.log('游客注册失败，尝试登录');
+        setState('landing');
+      }
+    } catch (e: any) {
+      // 网络错误也允许游客进入
+      console.error('游客登录失败:', e);
+      setState('landing');
+    }
+  };
+
+  // 发送验证码
+  const handleSendCode = () => {
+    if (!loginPhone || loginPhone.length !== 11) {
+      alert('请输入正确的手机号');
+      return;
+    }
+    // TODO: 实际发送验证码 API
+    setCodeSent(true);
+    setCountdown(60);
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setCodeSent(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   };
 
   // 检查已登录状态
@@ -296,6 +412,18 @@ const App: React.FC = () => {
 
   const selectMode = (m: DiscoveryMode) => { setMode(m); setState('intensity_select'); setShowAllModes(false); };
   const selectIntensity = (i: DiscoveryIntensity) => { 
+    // 检查 token 是否足够开启新话题 (30 token)
+    if (user && userTokens < 30) {
+      alert(lang === 'zh' ? '先令不足，需要30点开启新话题' : 'Insufficient Shi ling. Need 30 to start a new topic');
+      return;
+    }
+    // 扣除 token
+    if (user) {
+      const newTokens = userTokens - 30;
+      setUserTokens(newTokens);
+      // 同步到数据库
+      philosophyApi.updateTokens(user.id, 30, 'deduct').catch(console.error);
+    }
     setIntensity(i); setState('chatting'); 
     if (mode) startJourney(mode, i); 
   };
@@ -341,6 +469,14 @@ const App: React.FC = () => {
     setIsLoading(true); setError(null);
     setDialoguePhase('judge'); // 开始审判机阶段
     setSessionId(`session-${Date.now()}`); // 创建新的session ID
+    
+    // 开始新对话时保存历史记录
+    const modeLabel = MODE_DEFINITIONS.find(def => def.id === m)?.id || m;
+    const { saveToHistory } = await import('./components/HistorySidebar');
+    const newHistoryId = saveToHistory(m, modeLabel, 0, '', undefined, false);
+    console.log('新对话已保存到历史记录:', newHistoryId);
+    // 刷新历史记录
+    setHistoryRefreshKey(prev => prev + 1);
     
     try {
       const pool = INITIAL_QUESTION_POOL[m];
@@ -401,18 +537,19 @@ const App: React.FC = () => {
     const textToSend = overrideInput || input;
     if (!textToSend.trim() || isLoading || !mode) return;
 
-    // 移除审判机消息的 suggestions（隐藏 chips）- 只移除审判机的，不要移除哲学家的
-    setMessages(prev => {
-      // 找到最后一个审判机消息，清除它的 suggestions
-      const msgs = [...prev];
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        if (msgs[i].speaker === 'Judge' && msgs[i].suggestions) {
-          msgs[i] = { ...msgs[i], suggestions: undefined };
-          break;
-        }
-      }
-      return msgs;
-    });
+    // 检查 token 是否足够回答 (5 token)
+    if (user && userTokens < 5) {
+      alert(lang === 'zh' ? '先令不足，需要5点回答问题' : 'Insufficient Shi ling. Need 5 to answer');
+      return;
+    }
+
+    // 扣除回答消耗的 token
+    if (user) {
+      const newTokens = userTokens - 5;
+      setUserTokens(newTokens);
+      // 同步到数据库
+      philosophyApi.updateTokens(user.id, 5, 'deduct').catch(console.error);
+    }
 
     const userMsg: Message = { id: `user-${Date.now()}`, role: 'user', content: textToSend, timestamp: Date.now() };
     
@@ -421,8 +558,131 @@ const App: React.FC = () => {
     
     console.log('=== 开始处理用户回答 ===');
     console.log('用户回答:', textToSend);
+    console.log('哲学家模式:', philosopherMode);
     
     try {
+      // ===== 哲学家一对一模式 =====
+      if (philosopherMode && selectedPhilosopher) {
+        setDialoguePhase('philosopher');
+        console.log('=== 哲学家一对一对话模式 ===');
+        
+        // 构建哲学家名称和提示
+        const philosopherName = lang === 'zh' ? selectedPhilosopher.display_name_zh : (selectedPhilosopher.display_name_en || selectedPhilosopher.name);
+        const philosopherPrompt = selectedPhilosopher.prompt || '';
+        const isZh = lang === 'zh';
+        
+        try {
+          // 构建增强的 prompt，让哲学家进行反问和争论
+          const debatePrompt = isZh
+            ? `你是${philosopherName}。${philosopherPrompt}
+            
+当前话题：${philosopherTopic || '生命意义'}
+
+用户刚才的回答：${textToSend}
+
+请基于你的哲学思想，对用户的回答进行反驳、质疑或深入追问。要求：
+1. 直接指出用户观点中的问题或矛盾
+2. 引入你的哲学立场进行辩论，论证要充分
+3. 提出尖锐的反问，让用户陷入思考
+4. 可以加入适当的动作和神态描写
+5. 控制在150-200字，观点要犀利，论证要完整`
+            : `You are ${philosopherName}. ${philosopherPrompt}
+
+Current topic: ${philosopherTopic || 'Meaning of Life'}
+
+User's answer: ${textToSend}
+
+Please refute, question, or deeply inquire about the user's answer based on your philosophical stance. Requirements:
+1. Point out problems or contradictions in the user's viewpoint
+2. Introduce your philosophical position for debate with thorough argumentation
+3. Ask sharp counterquestions to make the user think
+4. Include appropriate actions and expressions
+5. Keep within 150-200 words, be incisive and comprehensive`;
+
+          // 直接调用 AI 生成回复（不带审判机）
+          const philosopherStream = streamPhilosopherResponse(
+            textToSend,
+            philosopherTopic || '',
+            mode,
+            settings,
+            lang,
+            {
+              name: philosopherName,
+              prompt: debatePrompt,
+              keywords: selectedPhilosopher.keywords as any
+            }
+          );
+
+          // 逐个显示哲学家消息
+          for await (const { messages: newPhilosopherMessages } of philosopherStream) {
+            console.log('收到哲学家消息:', newPhilosopherMessages);
+            if (newPhilosopherMessages.length > 0) {
+              for (let i = 0; i < newPhilosopherMessages.length; i++) {
+                const msg = newPhilosopherMessages[i];
+                setMessages(prev => [...prev, { ...msg, speaker: philosopherName, id: `phil-${Date.now()}-${i}` }]);
+                
+                setTimeout(() => {
+                  if (scrollRef.current) {
+                    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                  }
+                }, 100);
+                
+                await new Promise(resolve => setTimeout(resolve, 1200));
+              }
+            }
+          }
+          
+          console.log('哲学家回复完成');
+          
+          // 保存对话历史到数据库
+          try {
+            await philosophyApi.saveConversation({
+              user_id: user?.username || 'guest',
+              session_id: sessionId,
+              mode: `philosopher_${philosopherName}`,
+              round: questionCount + 1,
+              judge_question: philosopherTopic || '',
+              user_answer: textToSend,
+              judge_response: '',
+              philosopher_response: newPhilosopherMessages?.[0]?.content || ''
+            });
+          } catch (e) { console.error('保存对话失败:', e); }
+          
+          setQuestionCount(prev => prev + 1);
+          setDialoguePhase('waiting');
+          setIsLoading(false);
+          
+          // 哲学家一对一模式直接返回
+          console.log('哲学家对话完成，准备返回');
+          return; // 哲学家模式直接返回，不走下面的审判机逻辑
+        } catch (e: any) {
+          console.error('哲学家回复失败:', e);
+          setError(e.message || t.errorQuota);
+          setIsLoading(false);
+          return;
+        }
+      }
+      
+      // 如果是哲学家模式但没有选中哲学家，也直接返回
+      if (philosopherMode) {
+        console.log('哲学家模式但未选中哲学家，直接返回');
+        setIsLoading(false);
+        return;
+      }
+      
+      // ===== 普通模式：审判机 + 哲学家 =====
+      // 移除审判机消息的 suggestions（隐藏 chips）
+      setMessages(prev => {
+        const msgs = [...prev];
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i].speaker === 'Judge' && msgs[i].suggestions) {
+            msgs[i] = { ...msgs[i], suggestions: undefined };
+            break;
+          }
+        }
+        return msgs;
+      });
+      
       // ===== 第一阶段：审判机回复 =====
       setDialoguePhase('judge');
       
@@ -437,12 +697,10 @@ const App: React.FC = () => {
       const turnId = `turn-${Date.now()}`;
       let finalIsDone = false;
       let judgeResponseContent = '';
-      let currentParsedMessages: Message[] = []; // 用于存储最新的消息
-      let judgeMessageId = ''; // 审判机消息ID，保持不变
+      let currentParsedMessages: Message[] = [];
+      let judgeMessageId = '';
 
       // ===== 第一阶段：直接到哲学家点评（跳过审判机追问）=====
-      // 用户回答后，审判机不立即追问，而是让哲学家先点评
-      
       // ===== 第二阶段：哲学家回复 =====
       setDialoguePhase('philosopher');
       console.log('=== 开始哲学家回复阶段 ===');
@@ -571,6 +829,18 @@ const App: React.FC = () => {
 
   const analyze = async () => {
     if (!mode) return;
+    
+    // 检查 token 是否足够生成总结 (20 token)
+    if (user && userTokens < 20) {
+      alert(lang === 'zh' ? '先令不足，需要20点生成总结' : 'Insufficient Shi ling. Need 20 to generate summary');
+      return;
+    }
+    
+    // 扣除总结消耗的 token
+    if (user) {
+      setUserTokens(prev => prev - 20);
+    }
+    
     setState('analyzing'); setIsLoading(true);
     try {
       const res = await generateFinalAnalysis([{ id: 's', role: 'user', content: 'START', timestamp: 0 }, ...messages], mode, settings);
@@ -815,16 +1085,19 @@ const App: React.FC = () => {
           </div>
 
           <div className="space-y-4">
+            {/* 手机号输入 */}
             <div className="relative">
-               <User className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+               <Smartphone className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                <input 
-                 type="text" 
-                 placeholder={t.usernamePlaceholder}
-                 value={loginUsername}
-                 onChange={(e) => setLoginUsername(e.target.value)}
+                 type="tel" 
+                 placeholder={t.phonePlaceholder}
+                 value={loginPhone}
+                 onChange={(e) => setLoginPhone(e.target.value)}
+                 maxLength={11}
                  className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
                />
             </div>
+            {/* 密码输入 */}
             <div className="relative">
                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                <input 
@@ -832,26 +1105,49 @@ const App: React.FC = () => {
                  placeholder={t.passwordPlaceholder}
                  value={loginPassword}
                  onChange={(e) => setLoginPassword(e.target.value)}
-                 onKeyDown={(e) => e.key === 'Enter' && (isRegistering ? handleRegister(loginUsername, loginPassword) : handleLogin(loginUsername, loginPassword))}
+                 onKeyDown={(e) => e.key === 'Enter' && handleLogin(loginPhone, loginPassword)}
                  className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
                />
             </div>
+            {/* 验证码输入（仅注册时显示） */}
+            {isRegistering && (
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Key className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder={t.verifyCodePlaceholder}
+                    value={verifyCode}
+                    onChange={(e) => setVerifyCode(e.target.value)}
+                    maxLength={6}
+                    className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
+                  />
+                </div>
+                <button 
+                  onClick={handleSendCode}
+                  disabled={countdown > 0}
+                  className="px-4 bg-indigo-600 text-white rounded-2xl font-bold text-sm hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {countdown > 0 ? `${countdown}s` : t.sendCodeBtn}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="space-y-4">
             <button 
-              onClick={() => isRegistering ? handleRegister(loginUsername, loginPassword) : handleLogin(loginUsername, loginPassword)}
-              disabled={!loginUsername || !loginPassword}
+              onClick={() => isRegistering ? handleRegister(loginPhone, loginPassword, verifyCode) : handleLogin(loginPhone, loginPassword)}
+              disabled={!loginPhone || !loginPassword}
               className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ArrowRight size={20} />
-              {isRegistering ? (lang === 'zh' ? '注册' : 'Register') : t.loginBtn}
+              {isRegistering ? t.registerBtn : t.loginBtn}
             </button>
             
             {/* 切换登录/注册 */}
             <div className="text-center">
               <button 
-                onClick={() => setIsRegistering(!isRegistering)}
+                onClick={() => { setIsRegistering(!isRegistering); setVerifyCode(''); }}
                 className="text-sm text-indigo-600 hover:text-indigo-800"
               >
                 {isRegistering 
@@ -871,7 +1167,7 @@ const App: React.FC = () => {
                 <MessageSquare size={18} />
                 {t.wechatLogin}
               </button>
-              <button onClick={() => setState('landing')} className="py-3 px-4 bg-slate-50 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors">
+              <button onClick={handleGuestLogin} className="py-3 px-4 bg-slate-50 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors">
                 <User size={18} />
                 {t.guestLogin}
               </button>
@@ -895,9 +1191,15 @@ const App: React.FC = () => {
           intensity=""
           questionCount={0}
           currentHistoryId={undefined}
+          user={user}
+          userTokens={userTokens}
+          onOpenVIP={() => setShowVIP(true)}
+          historyRefreshKey={historyRefreshKey}
+          onSelectHistory={handleSelectHistory}
           onStartNew={reset}
           onOpenSettings={() => setShowSettings(true)}
           onOpenAllModes={() => setShowAllModes(true)}
+          onOpenPhilosophers={() => setShowPhilosophers(true)}
           onReset={() => {}}
           onChangeLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
         />
@@ -925,6 +1227,94 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* 哲学家库 Overlay */}
+        {showPhilosophers && (
+          <PhilosophersLibrary 
+            language={lang}
+            onClose={() => setShowPhilosophers(false)}
+            onSelectPhilosopher={(philosopher) => {
+              // 点击哲学家卡片后，设置选中的哲学家，显示话题选择
+              setSelectedPhilosopher(philosopher);
+            }}
+          />
+        )}
+
+        {/* 哲学家话题选择弹窗 */}
+        {selectedPhilosopher && (
+          <PhilosopherTopicSelect 
+            language={lang}
+            philosopher={selectedPhilosopher as any}
+            onClose={() => { setSelectedPhilosopher(null); }}
+            onBack={() => setSelectedPhilosopher(null)}
+            onSelectTopic={async (topic) => {
+              setPhilosopherTopic(topic);
+              setPhilosopherMode(true);
+              setShowPhilosophers(false);
+              setMode('LIFE_MEANING');
+              setIsLoading(true);
+              
+              const philosopherName = lang === 'zh' ? selectedPhilosopher!.display_name_zh : (selectedPhilosopher!.display_name_en || selectedPhilosopher!.name);
+              const philosopherPrompt = selectedPhilosopher!.prompt || '';
+              
+              // 用哲学家的口吻向 AI 询问首个问题
+              const isZh = lang === 'zh';
+              const firstQuestionPrompt = isZh
+                ? `你是${philosopherName}。${philosopherPrompt}\n\n请基于话题"${topic}"，用你的哲学思想和说话风格提出一个深刻的开场问题。要求：\n1. 用第一人称表达，可以加入适当的动作和神态描写\n2. 问题要有哲学深度，能引发思考\n3. 文字优美，有散文般的质感\n4. 控制在80-120字以内`
+                : `You are ${philosopherName}. ${philosopherPrompt}\n\nBased on the topic "${topic}", ask a profound opening question in your philosophical style and speaking manner. Requirements:\n1. Express in first person, include appropriate actions and expressions\n2. Questions should have philosophical depth\n3. Beautiful prose-like quality\n4. Keep within 80-120 words`;
+              
+              try {
+                // 调用 AI 生成首个问题
+                const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${settings.apiKey || 'sk-b9e79da674114733be8df0d48a2095a2'}`
+                  },
+                  body: JSON.stringify({
+                    model: 'deepseek-chat',
+                    messages: [
+                      { role: 'system', content: firstQuestionPrompt },
+                      { role: 'user', content: isZh ? '请提出你的开场问题' : 'Please ask your opening question' }
+                    ],
+                    temperature: 0.8
+                  })
+                });
+                
+                const data = await response.json();
+                const firstQuestion = data.choices?.[0]?.message?.content || (isZh 
+                  ? `${topic}... 你如何看待这个问题？`
+                  : `... What do you think about this?`);
+                
+                const welcomeMsg: Message = { 
+                  id: `phil-welcome-${Date.now()}`, 
+                  role: 'assistant', 
+                  content: firstQuestion,
+                  speaker: philosopherName,
+                  timestamp: Date.now() 
+                };
+                setMessages([welcomeMsg]);
+              } catch (e) {
+                console.error('生成开场问题失败:', e);
+                // 如果失败，使用默认问题
+                const welcomeMsg: Message = { 
+                  id: `phil-welcome-${Date.now()}`, 
+                  role: 'assistant', 
+                  content: isZh 
+                    ? `关于「${topic}」，我想听听你的想法...`
+                    : `Regarding "${topic}", I'd like to hear your thoughts...`,
+                  speaker: philosopherName,
+                  timestamp: Date.now() 
+                };
+                setMessages([welcomeMsg]);
+              }
+              
+              setIsLoading(false);
+              setState('chatting');
+              setSessionId(`philo-${Date.now()}`);
+            }}
+          />
+        )}
+
         {/* Settings Overlay */}
         {showSettings && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
@@ -937,6 +1327,42 @@ const App: React.FC = () => {
               </div>
 
               <div className="space-y-6">
+                {/* 账号信息 */}
+                {user && (
+                  <div className="bg-indigo-50 rounded-2xl p-5 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
+                        <User size={20} />
+                      </div>
+                      <div>
+                        <p className="text-xs text-indigo-400 uppercase font-bold">{t.accountInfo}</p>
+                        <p className="text-sm font-bold text-slate-800">{user.username || user.email || '用户'}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        onClick={() => setShowEditProfile(true)}
+                        className="py-2.5 bg-white text-indigo-600 rounded-xl font-bold text-sm hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Key size={16} />
+                        {t.editProfile}
+                      </button>
+                      <button 
+                        onClick={() => {
+                          localStorage.removeItem('user');
+                          setUser(null);
+                          setState('auth');
+                          setShowSettings(false);
+                        }}
+                        className="py-2.5 bg-white text-red-600 rounded-xl font-bold text-sm hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                      >
+                        <LogOut size={16} />
+                        {t.logout}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Language */}
                 <div className="space-y-3">
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">Language / 语言</label>
@@ -951,38 +1377,112 @@ const App: React.FC = () => {
                     <button onClick={() => saveSettings(settings)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-lg hover:bg-black transition-all">
                       {t.saveBtn}
                     </button>
-                    <div className="grid grid-cols-2 gap-3">
+                    {/* 切换账号按钮 */}
+                    {!user && (
                       <button 
-                        onClick={() => { setShowSettings(false); setShowAllModes(true); }} 
-                        className="py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                        onClick={() => { setShowSettings(false); setState('auth'); }} 
+                        className="w-full py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                       >
-                        <LayoutGrid size={16} />
-                        {t.viewAll}
+                        <LogIn size={16} />
+                        {t.switchAccount}
                       </button>
-                      <button 
-                        onClick={() => { setShowSettings(false); setShowPhilosopherIntro(true); }} 
-                        className="py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-                      >
-                        <Sparkles size={16} />
-                        {lang === 'zh' ? '哲学家' : 'Philosophers'}
-                      </button>
-                    </div>
+                    )}
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* 顶部控制栏 */}
-        <div className="fixed top-6 right-6 z-50 flex gap-3">
-          <button 
-            onClick={() => setShowSidebar(!showSidebar)} 
-            className="p-3 bg-white shadow-lg rounded-full hover:bg-indigo-50 transition-all border border-slate-100"
-            title={showSidebar ? '隐藏侧边栏' : '显示侧边栏'}
-          >
-            {showSidebar ? <X size={20} className="text-indigo-600"/> : <Menu size={20} className="text-indigo-600"/>}
-          </button>
-        </div>
+        {/* 修改资料弹窗 */}
+        {showEditProfile && user && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+            <div className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl p-6 space-y-6">
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-slate-900">{t.editProfile}</h3>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs text-slate-400 uppercase font-bold">{lang === 'zh' ? '用户名' : 'Username'}</label>
+                  <input 
+                    type="text" 
+                    defaultValue={user.username || ''}
+                    id="editUsername"
+                    className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-indigo-100 rounded-xl outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 uppercase font-bold">{lang === 'zh' ? '新密码' : 'New Password'}</label>
+                  <input 
+                    type="password" 
+                    placeholder={lang === 'zh' ? '留空则不修改' : 'Leave empty to keep current'}
+                    id="editPassword"
+                    className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-indigo-100 rounded-xl outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowEditProfile(false)}
+                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold"
+                >
+                  {t.cancel}
+                </button>
+                <button 
+                  onClick={() => {
+                    // TODO: 调用后端 API 更新用户信息
+                    alert(lang === 'zh' ? '功能开发中...' : 'Coming soon...');
+                    setShowEditProfile(false);
+                  }}
+                  className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold"
+                >
+                  {t.saveProfile}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VIP/捐赠弹窗 */}
+        {showVIP && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+            <div className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl p-6 space-y-6">
+              <div className="text-center space-y-2">
+                <div className="w-16 h-16 mx-auto bg-indigo-50 rounded-full flex items-center justify-center">
+                  <Zap size={32} className="text-indigo-600" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">{lang === 'zh' ? '获取更多先令' : 'Get More Shi ling'}</h3>
+                <p className="text-sm text-slate-400">{lang === 'zh' ? '继续你的哲学探索之旅' : 'Continue your philosophical journey'}</p>
+              </div>
+              
+              <div className="space-y-3">
+                <button className="w-full p-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-between">
+                  <span className="flex items-center gap-2"><Zap size={18} className="text-amber-400" /> {lang === 'zh' ? '基础包' : 'Basic'}</span>
+                  <span>{lang === 'zh' ? '¥19 / 200' : '$3 / 200'}</span>
+                </button>
+                <button className="w-full p-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-between">
+                  <span className="flex items-center gap-2"><Sparkles size={18} className="text-purple-400" /> {lang === 'zh' ? '进阶包' : 'Pro'}</span>
+                  <span>{lang === 'zh' ? '¥29 / 350' : '$5 / 350'}</span>
+                </button>
+                <button className="w-full p-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-between">
+                  <span className="flex items-center gap-2"><Crown size={18} className="text-amber-400" /> {lang === 'zh' ? '豪华包' : 'Premium'}</span>
+                  <span>{lang === 'zh' ? '¥49 / 650' : '$8 / 650'}</span>
+                </button>
+                <button className="w-full p-3 bg-slate-50 text-slate-500 rounded-xl font-medium hover:bg-slate-100 transition-all text-center">
+                  {lang === 'zh' ? '☕ 捐赠支持开发者' : '☕ Donate to Support'}
+                </button>
+              </div>
+
+              <button 
+                onClick={() => setShowVIP(false)}
+                className="w-full py-3 text-slate-400 font-medium hover:text-slate-600 transition-all"
+              >
+                {t.cancel}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Main Content: The Gacha Machine */}
         <div className="w-full max-w-xl text-center space-y-12 z-10 py-10 flex flex-col items-center">
@@ -1110,8 +1610,52 @@ const App: React.FC = () => {
 
     return (
       <div className="min-h-screen bg-slate-50/50 py-12 px-4">
-        <div className="max-w-4xl mx-auto flex flex-col gap-8">
-          <div className="flex justify-between items-center bg-white/90 backdrop-blur p-5 rounded-3xl sticky top-4 z-50 shadow-md border border-slate-100">
+        {/* 顶部导航栏 */}
+        <div className="fixed top-0 left-0 right-0 h-16 bg-white/90 backdrop-blur border-b border-slate-100 z-40 flex items-center justify-between px-4">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setShowSidebar(!showSidebar)} 
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              {showSidebar ? <X size={20} className="text-slate-600"/> : <Menu size={20} className="text-slate-600"/>}
+            </button>
+            <div className="flex items-center gap-2">
+              <Compass size={24} className="text-indigo-600" />
+              <span className="font-serif font-bold text-slate-900">{t.title}</span>
+            </div>
+          </div>
+          {mode && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-indigo-50 rounded-full">
+              <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{mode}</span>
+            </div>
+          )}
+        </div>
+
+        {/* 侧边栏 */}
+        <ChatSidebar 
+          language={lang}
+          isOpen={showSidebar}
+          onOpen={() => setShowSidebar(!showSidebar)}
+          mode={mode}
+          modeLabel={getModeLabel(mode)}
+          intensity={intensity}
+          questionCount={questionCount}
+          currentHistoryId={currentHistoryId}
+          user={user}
+          userTokens={userTokens}
+          onOpenVIP={() => setShowVIP(true)}
+          historyRefreshKey={historyRefreshKey}
+          onSelectHistory={handleSelectHistory}
+          onStartNew={reset}
+          onOpenSettings={() => setShowSettings(true)}
+          onOpenAllModes={() => setShowAllModes(true)}
+          onOpenPhilosophers={() => setShowPhilosophers(true)}
+          onReset={reset}
+          onChangeLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
+        />
+
+        <div className="max-w-4xl mx-auto flex flex-col gap-8 pt-16">
+          <div className="flex justify-between items-center bg-white/90 backdrop-blur p-5 rounded-3xl sticky top-20 z-40 shadow-md border border-slate-100">
              <button onClick={reset} className="px-6 py-2 text-slate-500 font-bold hover:text-indigo-600 flex items-center gap-2 transition-colors"><ArrowRight className="rotate-180" size={16}/>{t.backBtn}</button>
              <div className="flex gap-3">
                 <button onClick={() => exportAsImage(reportContainerRef, `Report_${mode}`)} className="px-6 py-3 bg-indigo-600 text-white rounded-2xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"><FileImage size={18}/>{t.exportReport}</button>
@@ -1123,19 +1667,19 @@ const App: React.FC = () => {
             <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-50 rounded-full blur-[100px] -mr-48 -mt-48 opacity-50"></div>
             
             {/* 1. 名言/motto 放在最前面 */}
-            <div className="w-full max-w-2xl py-8 text-center">
-               <div className="p-12 md:p-16 bg-gradient-to-br from-slate-800 to-slate-900 rounded-[3rem] text-white space-y-6 relative overflow-hidden shadow-2xl">
+            <div className="w-full max-w-2xl py-8 text-center group">
+               <div className="p-12 md:p-16 bg-gradient-to-br from-slate-800 to-slate-900 rounded-[3rem] text-white space-y-6 relative overflow-hidden shadow-2xl group-hover:shadow-3xl transition-shadow duration-500">
                   <Quote className="absolute top-8 left-8 text-white/10" size={80} />
-                  <h3 className="text-2xl md:text-3xl font-serif italic leading-relaxed text-indigo-100">"{parseBilingual(result.motto)}"</h3>
+                  <h3 className="text-2xl md:text-3xl font-serif italic leading-relaxed text-indigo-100 group-hover:scale-[1.02] transition-transform duration-300">"{parseBilingual(result.motto)}"</h3>
                </div>
             </div>
 
             {/* 2. 标题 + 哲学倾向 */}
-            <div className="text-center space-y-8 w-full max-w-2xl py-8 relative z-10">
+            <div className="text-center space-y-8 w-full max-w-2xl py-8 relative z-10 group">
               <div className="inline-flex items-center gap-3 px-6 py-2 bg-slate-900 text-white rounded-full text-[11px] tracking-[0.4em] font-bold uppercase"><Zap size={14} className="text-indigo-400" /> {t.resultTitle}</div>
-              <h1 className="text-4xl md:text-6xl font-serif font-bold text-slate-900 leading-[1.15]">{parseBilingual(result.title)}</h1>
+              <h1 className="text-4xl md:text-6xl font-serif font-bold text-slate-900 leading-[1.15] group-hover:text-indigo-900 transition-colors">{parseBilingual(result.title)}</h1>
               {result.philosophicalTrend && (
-                <div className="inline-flex items-center gap-3 px-8 py-3 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-[2rem] shadow-sm">
+                <div className="inline-flex items-center gap-3 px-8 py-3 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-[2rem] shadow-sm hover:shadow-lg hover:scale-105 transition-all duration-300">
                   <BrainCircuit size={20} />
                   <span className="text-sm font-black uppercase tracking-widest">{t.trendLabel}: {parseBilingual(result.philosophicalTrend)}</span>
                 </div>
@@ -1143,7 +1687,7 @@ const App: React.FC = () => {
             </div>
 
             {/* 3. 真我能量矩阵 (Dimensions) */}
-            <div className="w-full max-w-2xl py-10 space-y-10 bg-slate-50 px-10 py-12 rounded-[3rem] border border-slate-100 shadow-inner">
+            <div className="w-full max-w-2xl py-10 space-y-10 bg-slate-50 px-10 py-12 rounded-[3rem] border border-slate-100 shadow-inner hover:shadow-xl transition-shadow duration-300">
               <div className="text-center space-y-3">
                 <h3 className="text-[10px] font-black text-slate-400 tracking-[0.4em] uppercase">{t.dimensionTitle}</h3>
                 <div className="w-12 h-0.5 bg-indigo-200 mx-auto"></div>
@@ -1153,14 +1697,14 @@ const App: React.FC = () => {
                   const rawVal = dim.value;
                   const displayValue = (rawVal > 0 && rawVal <= 1) ? Math.round(rawVal * 100) : Math.round(rawVal);
                   return (
-                    <div key={i} className="space-y-3">
+                    <div key={i} className="space-y-3 group">
                       <div className="flex justify-between font-heiti font-bold text-base">
-                        <span className="text-slate-600">{parseBilingual(dim.label)}</span>
+                        <span className="text-slate-600 group-hover:text-indigo-600 transition-colors">{parseBilingual(dim.label)}</span>
                         <span className="text-indigo-600 font-serif italic text-xl">{displayValue}%</span>
                       </div>
-                      <div className="h-3 bg-white/80 border border-indigo-50 rounded-full overflow-hidden p-0.5 shadow-sm">
+                      <div className="h-3 bg-white/80 border border-indigo-50 rounded-full overflow-hidden p-0.5 shadow-sm group-hover:shadow-md transition-shadow">
                         <div 
-                          className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-1000 ease-out" 
+                          className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-1000 ease-out group-hover:from-indigo-400 group-hover:to-blue-400" 
                           style={{width:`${displayValue}%`}}
                         ></div>
                       </div>
@@ -1175,7 +1719,7 @@ const App: React.FC = () => {
               <h3 className="text-center text-[10px] font-black text-blue-500 tracking-[0.4em] uppercase">深度洞察 / Insights</h3>
               <div className="grid md:grid-cols-2 gap-8">
                 {result.keyInsights.map((ins, i) => (
-                  <div key={i} className="p-8 bg-white border border-slate-50 rounded-[2rem] shadow-sm hover:shadow-lg transition-all flex flex-col gap-4 group">
+                  <div key={i} className="p-8 bg-white border border-slate-50 rounded-[2rem] shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col gap-4 group">
                     <div className="w-8 h-8 bg-blue-50 text-blue-400 rounded-xl flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-all"><Target size={16}/></div>
                     <p className="text-lg text-slate-700 leading-relaxed font-heiti">{parseBilingual(ins)}</p>
                   </div>
@@ -1188,7 +1732,7 @@ const App: React.FC = () => {
               <h3 className="text-center text-[10px] font-black text-teal-500 tracking-[0.4em] uppercase">进化路径 / Evolution</h3>
               <div className="space-y-6">
                 {result.suggestedPaths.map((p, i) => (
-                  <div key={i} className="p-8 bg-teal-50/30 rounded-[2rem] flex items-center gap-6 border border-teal-50 hover:bg-white hover:shadow-lg transition-all group">
+                  <div key={i} className="p-8 bg-teal-50/30 rounded-[2rem] flex items-center gap-6 border border-teal-50 hover:bg-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
                     <div className="w-12 h-12 bg-teal-600 text-white rounded-xl flex items-center justify-center font-black text-xl shadow-lg group-hover:scale-110 transition-transform">{i+1}</div>
                     <p className="text-lg text-slate-800 font-heiti leading-relaxed">{parseBilingual(p)}</p>
                   </div>
@@ -1203,12 +1747,31 @@ const App: React.FC = () => {
                 <p className="text-3xl md:text-4xl font-bold text-slate-900 leading-tight font-serif italic">
                   {heroSentence}
                 </p>
-                <div className="space-y-6">
-                  {deepAnalysis.map((para, i) => (
-                    <p key={i} className="text-lg md:text-xl text-slate-600 leading-[1.8] font-heiti opacity-90">
-                      {para}
-                    </p>
-                  ))}
+                <div className="space-y-10">
+                  {deepAnalysis.map((para, i) => {
+                    // 根据段落内容生成子标题
+                    const subTitles = [
+                      "存在的觉醒",
+                      "行动的哲学",
+                      "意义的追寻",
+                      "自由的边界",
+                      "价值的重塑"
+                    ];
+                    const subTitle = subTitles[i % subTitles.length];
+                    return (
+                      <div key={i} className="group">
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+                            {i + 1}
+                          </div>
+                          <h4 className="text-lg font-bold text-slate-800 tracking-wide">{subTitle}</h4>
+                        </div>
+                        <p className="text-lg md:text-xl text-slate-600 leading-[1.8] font-heiti opacity-90 pl-14 border-l-2 border-indigo-100 group-hover:border-indigo-300 transition-all duration-300">
+                          {para}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1235,12 +1798,40 @@ const App: React.FC = () => {
         intensity={intensity}
         questionCount={questionCount}
         currentHistoryId={currentHistoryId}
+        user={user}
+          userTokens={userTokens}
+          onOpenVIP={() => setShowVIP(true)}
+        historyRefreshKey={historyRefreshKey}
+        onSelectHistory={handleSelectHistory}
         onStartNew={reset}
         onOpenSettings={() => setShowSettings(true)}
         onOpenAllModes={() => setShowAllModes(true)}
+        onOpenPhilosophers={() => setShowPhilosophers(true)}
         onReset={reset}
         onChangeLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
       />
+
+      {/* 顶部导航栏 */}
+      <div className="fixed top-0 left-0 right-0 h-16 bg-white/90 backdrop-blur border-b border-slate-100 z-40 flex items-center justify-between px-4">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowSidebar(!showSidebar)} 
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            title={showSidebar ? '隐藏侧边栏' : '显示侧边栏'}
+          >
+            {showSidebar ? <X size={20} className="text-slate-600"/> : <Menu size={20} className="text-slate-600"/>}
+          </button>
+          <div className="flex items-center gap-2">
+            <Compass size={24} className="text-indigo-600" />
+            <span className="font-serif font-bold text-slate-900">{t.title}</span>
+          </div>
+        </div>
+        {mode && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-indigo-50 rounded-full">
+            <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{mode}</span>
+          </div>
+        )}
+      </div>
 
       {/* 聊天内容区 */}
       <main ref={scrollRef} className="flex-1 overflow-y-auto pt-20 pb-48">

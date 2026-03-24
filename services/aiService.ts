@@ -290,20 +290,28 @@ export const streamPhilosopherResponse = async function* (
   judgeResponse: string,
   mode: DiscoveryMode,
   settings: AppSettings,
-  lang: string = 'zh'
+  lang: string = 'zh',
+  specificPhilosopher?: { name: string; prompt: string; keywords?: string } // 指定哲学家（一对一模式）
 ): AsyncGenerator<{ messages: Message[], isDone: boolean }> {
-  // 关键词匹配哲学家
-  const matchedPersonas = matchPersonas(userAnswer, mode);
-  const philosopherInstruction = getPhilosopherInstruction(
-    matchedPersonas,
-    userAnswer,
-    judgeResponse,
-    lang
-  );
   const isZh = lang === 'zh';
+  
+  let systemPrompt: string;
 
-  const systemPrompt = isZh
-    ? `你是一个哲学家角色扮演助手。
+  // 如果指定了特定哲学家，直接使用该哲学家的 prompt
+  if (specificPhilosopher) {
+    systemPrompt = specificPhilosopher.prompt || `你是${specificPhilosopher.name}。请以哲学家的身份与用户对话。`;
+  } else {
+    // 否则根据关键词匹配哲学家
+    const matchedPersonas = matchPersonas(userAnswer, mode);
+    const philosopherInstruction = getPhilosopherInstruction(
+      matchedPersonas,
+      userAnswer,
+      judgeResponse,
+      lang
+    );
+
+    systemPrompt = isZh
+      ? `你是一个哲学家角色扮演助手。
 ${philosopherInstruction}
 
 要求：
@@ -312,7 +320,7 @@ ${philosopherInstruction}
 3. 动作/神态描写要简洁
 4. 不要重复审判机已经说过的话
 5. 必须有至少1位哲学家发言`
-    : `You are a philosopher role-playing assistant.
+      : `You are a philosopher role-playing assistant.
 ${philosopherInstruction}
 
 Requirements:
@@ -321,15 +329,25 @@ Requirements:
 3. Keep action/expression descriptions concise
 4. Do not repeat what the Judge has already said
 5. At least one philosopher must respond`;
+  }
+
+  // 构建 user message
+  let userMessage: string;
+  if (specificPhilosopher) {
+    // 一对一哲学家模式
+    userMessage = isZh
+      ? `用户说：${userAnswer}\n\n请以${specificPhilosopher.name}的身份，用符合其哲学思想和说话风格的方式回复。可以加入适当的动作和神态描写。`
+      : `User said: ${userAnswer}\n\nPlease respond as ${specificPhilosopher.name}, in a way that reflects their philosophical thinking and speaking style. You may include appropriate actions and expressions.`;
+  } else {
+    // 多个哲学家模式
+    userMessage = isZh
+      ? `请作为匹配到的哲学家，对用户的回答发表看法。`
+      : `Please share your views as the matched philosopher.`;
+  }
 
   const messages: any[] = [
     { role: 'system', content: systemPrompt },
-    {
-      role: 'user',
-      content: isZh
-        ? `请作为匹配到的哲学家，对用户的回答发表看法。`
-        : `Please share your views as the matched philosopher.`
-    }
+    { role: 'user', content: userMessage }
   ];
 
   if (!sessionId) {
@@ -429,7 +447,7 @@ Requirements:
   // 解析完整的响应，按 [Persona: xxx] 分割
   const philosopherRegex = /\[Persona:\s*([^\]]+)\]([\s\S]*?)(?=\[Persona:|$)/gi;
   let match;
-  const philosophers: { name: string; content: string }[] = [];
+  let philosophers: { name: string; content: string }[] = [];
   
   while ((match = philosopherRegex.exec(fullResponse)) !== null) {
     const name = match[1].trim();
@@ -439,10 +457,26 @@ Requirements:
     }
   }
   
+  // 如果指定了特定哲学家，只保留该哲学家的回复
+  if (specificPhilosopher && philosophers.length > 0) {
+    const targetName = specificPhilosopher.name;
+    // 尝试匹配哲学家名字（可能包含变体）
+    philosophers = philosophers.filter(p => 
+      p.name.includes(targetName) || targetName.includes(p.name)
+    );
+    // 如果过滤后没有结果，使用整个回复作为该哲学家的回复
+    if (philosophers.length === 0) {
+      philosophers = [{
+        name: targetName,
+        content: fullResponse.trim()
+      }];
+    }
+  }
+  
   // 如果没有匹配到哲学家，尝试整段作为回复
   if (philosophers.length === 0 && fullResponse.trim()) {
     philosophers.push({
-      name: matchedPersonas[0] || 'Philosopher',
+      name: specificPhilosopher?.name || 'Philosopher',
       content: fullResponse.trim()
     });
   }

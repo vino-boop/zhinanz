@@ -45,6 +45,13 @@ export const philosophyApi = {
   getPhilosopherPrompts: () => fetchApi('/philosophy/prompts/philosopher'),
   getJudgePrompt: () => fetchApi('/philosophy/prompts/judge'),
   
+  // 更新用户 tokens
+  updateTokens: (userId: number, tokens: number, action: 'deduct' | 'add' | 'set' = 'deduct') =>
+    fetchApi<{ success: boolean; tokens: number }>('/philosophy/user/tokens', {
+      method: 'POST',
+      body: JSON.stringify({ userId, tokens, action })
+    }),
+  
   // 对话历史详细记录
   saveConversation: (data: {
     user_id: string;
