@@ -35,7 +35,7 @@ export const PhilosophersLibrary: React.FC<PhilosophersLibraryProps> = ({
   useEffect(() => {
     const fetchPhilosophers = async () => {
       try {
-        const res = await fetch('http://42.193.225.114:3001/api/philosophy/philosophers');
+        const res = await fetch('https://backend.vinolab.tech/api/philosophy/philosophers');
         const data = await res.json();
         if (data.philosophers && Array.isArray(data.philosophers)) {
           setPhilosophers(data.philosophers.filter((p: Philosopher) => p.status === 'active'));
