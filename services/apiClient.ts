@@ -1,5 +1,5 @@
 // API 客户端 - 用于调用后端服务
-const API_BASE_URL = 'https://philosophy.vinolab.tech/api';
+const API_BASE_URL = 'https://backend.vinolab.tech/api';
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -113,6 +113,7 @@ export const fengshuiApi = {
 // 总览模块
 export const overviewApi = {
   getApiKeys: () => fetchApi('/overview/apikeys'),
+  getApiKey: (moduleName: string) => fetchApi<{ api_key: string; full_key: string }>(`/overview/apikey/${moduleName}`),
   getAccounts: () => fetchApi('/overview/accounts'),
   getTokenUsage: () => fetchApi('/overview/token-usage'),
 };

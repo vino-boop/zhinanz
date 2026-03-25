@@ -23,6 +23,23 @@ function getApiKeyFromStorage(): { apiKey: string; provider: string } {
   return { apiKey: '', provider: 'deepseek' };
 }
 
+// 从后端 API 获取 API Key
+async function getApiKeyFromBackend(): Promise<{ apiKey: string; provider: string }> {
+  try {
+    const response = await fetch('https://backend.vinolab.tech/api/overview/apikey/哲思');
+    if (response.ok) {
+      const data = await response.json();
+      if (data.api_key) {
+        console.log('从后端获取 API Key 成功');
+        return { apiKey: data.api_key, provider: 'deepseek' };
+      }
+    }
+  } catch (e) {
+    console.warn('从后端获取 API Key 失败:', e);
+  }
+  return { apiKey: '', provider: 'deepseek' };
+}
+
 // 保存 sessionId (为了兼容现有接口，虽然直连不需要)
 let sessionId: string | null = null;
 
@@ -160,9 +177,16 @@ Requirements:
     sessionId = Date.now().toString();
   }
 
-  // 获取 API Key：优先使用 settings，否则从 localStorage 读取
+  // 获取 API Key：优先从后端获取，否则用 settings，否则从 localStorage 读取
   let apiKey = settings.apiKey;
   let provider = settings.provider || 'deepseek';
+  if (!apiKey) {
+    const backendKey = await getApiKeyFromBackend();
+    if (backendKey.apiKey) {
+      apiKey = backendKey.apiKey;
+      provider = backendKey.provider;
+    }
+  }
   if (!apiKey) {
     const stored = getApiKeyFromStorage();
     apiKey = stored.apiKey;
@@ -354,9 +378,16 @@ Requirements:
     sessionId = Date.now().toString();
   }
 
-  // 获取 API Key：优先使用 settings，否则从 localStorage 读取
+  // 获取 API Key：优先从后端获取，否则用 settings，否则从 localStorage 读取
   let apiKey = settings.apiKey;
   let provider = settings.provider || 'deepseek';
+  if (!apiKey) {
+    const backendKey = await getApiKeyFromBackend();
+    if (backendKey.apiKey) {
+      apiKey = backendKey.apiKey;
+      provider = backendKey.provider;
+    }
+  }
   if (!apiKey) {
     const stored = getApiKeyFromStorage();
     apiKey = stored.apiKey;
@@ -584,9 +615,16 @@ Your response MUST be in JSON format, containing:
   }
 
   return callWithRetry(async () => {
-    // 获取 API Key：优先使用 settings，否则从 localStorage 读取
+    // 获取 API Key：优先从后端获取，否则用 settings，否则从 localStorage 读取
     let apiKey = settings.apiKey;
     let provider = settings.provider || 'deepseek';
+    if (!apiKey) {
+      const backendKey = await getApiKeyFromBackend();
+      if (backendKey.apiKey) {
+        apiKey = backendKey.apiKey;
+        provider = backendKey.provider;
+      }
+    }
     if (!apiKey) {
       const stored = getApiKeyFromStorage();
       apiKey = stored.apiKey;
