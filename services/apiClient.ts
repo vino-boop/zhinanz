@@ -1,5 +1,5 @@
 // API 客户端 - 用于调用后端服务
-const API_BASE_URL = 'http://42.193.225.114:3001/api';
+const API_BASE_URL = 'https://philosophy.vinolab.tech/api';
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
