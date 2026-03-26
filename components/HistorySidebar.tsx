@@ -3,6 +3,36 @@ import { Language, DiscoveryMode, DiscoveryResult } from '../types';
 import { X, Clock, CheckCircle, MessageCircle, Trash2, ChevronRight, History } from 'lucide-react';
 import { philosophyApi } from '../services/apiClient';
 
+// mode -> 中文标签映射
+const MODE_LABELS_ZH: Record<string, string> = {
+  LIFE_MEANING: '生命意义',
+  JUSTICE: '何为正义',
+  SELF_IDENTITY: '自我认同',
+  FREE_WILL: '自由意志',
+  SIMULATION: '模拟世界',
+  OTHER_MINDS: '他心问题',
+  LANGUAGE: '语言哲学',
+  SCIENCE: '科学哲学'
+};
+
+const MODE_LABELS_EN: Record<string, string> = {
+  LIFE_MEANING: 'Life Meaning',
+  JUSTICE: 'Justice',
+  SELF_IDENTITY: 'Self Identity',
+  FREE_WILL: 'Free Will',
+  SIMULATION: 'Simulation',
+  OTHER_MINDS: 'Other Minds',
+  LANGUAGE: 'Language',
+  SCIENCE: 'Science'
+};
+
+const getModeLabel = (mode: string, lang: Language): string => {
+  if (lang === 'zh') {
+    return MODE_LABELS_ZH[mode] || mode;
+  }
+  return MODE_LABELS_EN[mode] || mode;
+};
+
 interface ChatHistory {
   id: string;
   mode: DiscoveryMode;
@@ -55,14 +85,14 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
         if (res && res.history && res.history.length > 0) {
           // 转换后端数据格式为前端格式
           const backendHistory: ChatHistory[] = res.history.map((h: any) => ({
-            id: h.sessionId,
+            id: h.session_id || h.sessionId,
             mode: h.mode as DiscoveryMode,
-            modeLabel: h.mode,
-            questionTitle: h.questionTitle || h.mode,
+            modeLabel: getModeLabel(h.mode, language),
+            questionTitle: h.questionTitle || getModeLabel(h.mode, language),
             questionCount: h.questionCount || 0,
             lastMessage: h.lastMessage || '',
-            timestamp: new Date(h.createdAt).getTime(),
-            isComplete: h.hasReport || false
+            timestamp: new Date(h.createdAt || h.created_at).getTime(),
+            isComplete: h.hasReport || h.is_complete || false
           }));
           setHistory(backendHistory.sort((a: ChatHistory, b: ChatHistory) => b.timestamp - a.timestamp));
           return;

@@ -304,7 +304,8 @@ const App: React.FC = () => {
     
     // 使用 sessionId 作为会话ID
     const sessionId = history.sessionId || history.id;
-    const userId = user?.id;
+    // 使用 username 与 history sidebar 保持一致
+    const userId = user?.username || localStorage.getItem('guestUserId') || 'guest';
     
     if (history.isComplete && history.result) {
       // 有完整报告 - 跳转到报告页面
@@ -578,7 +579,7 @@ const App: React.FC = () => {
       startContentRef.current = startContent;
       
       // 开始新对话时保存历史记录（移动到获取问题之后）
-      const modeLabel = MODE_DEFINITIONS.find(def => def.id === m)?.id || m;
+      const modeLabel = getModeLabel(m);
       const { saveToHistory } = await import('./components/HistorySidebar');
       const newHistoryId = saveToHistory(m, modeLabel, randomQ.content, 0, '', undefined, false);
       console.log('新对话已保存到历史记录:', newHistoryId);
