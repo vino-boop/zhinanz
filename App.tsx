@@ -264,6 +264,7 @@ const App: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false); // 切换登录/注册
   const [codeSent, setCodeSent] = useState(false); // 验证码发送状态
   const [countdown, setCountdown] = useState(0); // 倒计时
+  const [isAuthLoading, setIsAuthLoading] = useState(false); // 登录/注册加载状态
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -365,6 +366,7 @@ const App: React.FC = () => {
 
   // 登录处理
   const handleLogin = async (phone: string, password: string) => {
+    setIsAuthLoading(true);
     try {
       const res: any = await authApi.login(phone, password);
       if (res.success) {
@@ -378,11 +380,14 @@ const App: React.FC = () => {
       }
     } catch (e: any) {
       alert(e.message || '登录失败，请检查网络');
+    } finally {
+      setIsAuthLoading(false);
     }
   };
 
   // 注册处理
   const handleRegister = async (phone: string, password: string, code: string) => {
+    setIsAuthLoading(true);
     try {
       // TODO: 验证码校验
       const res: any = await authApi.register(phone, password, phone); // 手机号作为账号
@@ -397,6 +402,8 @@ const App: React.FC = () => {
       }
     } catch (e: any) {
       alert(e.message || '注册失败，请检查网络');
+    } finally {
+      setIsAuthLoading(false);
     }
   };
 
@@ -662,11 +669,13 @@ Please refute, question, or deeply inquire about the user's answer based on your
           );
 
           // 逐个显示哲学家消息
+          let philosopherResponses: string[] = [];
           for await (const { messages: newPhilosopherMessages } of philosopherStream) {
             console.log('收到哲学家消息:', newPhilosopherMessages);
             if (newPhilosopherMessages.length > 0) {
               for (let i = 0; i < newPhilosopherMessages.length; i++) {
                 const msg = newPhilosopherMessages[i];
+                philosopherResponses.push(msg.content);
                 setMessages(prev => [...prev, { ...msg, speaker: philosopherName, id: `phil-${Date.now()}-${i}` }]);
                 
                 setTimeout(() => {
@@ -692,7 +701,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
               judge_question: philosopherTopic || '',
               user_answer: textToSend,
               judge_response: '',
-              philosopher_response: newPhilosopherMessages?.[0]?.content || ''
+              philosopher_response: philosopherResponses.join('\n\n')
             });
           } catch (e) { console.error('保存对话失败:', e); }
           
@@ -792,7 +801,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
           // 获取本轮对话的相关消息
           const judgeMsgs = messages.filter(m => m.speaker === 'Judge' || m.speaker === '审判机');
           const userMsgs = messages.filter(m => m.role === 'user');
-          const philosopherMsgs = messages.filter(m => m.speaker && m.speaker.startsWith('Persona:'));
+          const philosopherMsgs = messages.filter(m => m.speaker === philosopherName);
           
           const lastJudgeQuestion = judgeMsgs.length > 0 ? judgeMsgs[judgeMsgs.length - 1].content : '';
           const lastUserAnswer = userMsgs.length > 0 ? userMsgs[userMsgs.length - 1].content : textToSend;
@@ -827,7 +836,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
       
       // 更新历史，包含用户回答和哲学家回复（不包括审判机的上一个问题）
       const fullHistory = messages.filter(m => 
-        m.role === 'user' || (m.speaker && m.speaker.startsWith('Persona:'))
+        m.role === 'user' || m.speaker === philosopherName
       );
       fullHistory.push(userMsg);
       
@@ -1116,6 +1125,47 @@ Please refute, question, or deeply inquire about the user's answer based on your
   }, []);
 
   if (state === 'auth') {
+    // 登录/注册等待画面
+    if (isAuthLoading) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-100 rounded-full blur-[100px] -mr-48 -mt-48 opacity-50 animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-100 rounded-full blur-[100px] -ml-48 -mb-48 opacity-50"></div>
+          
+          <div className="w-full max-w-md bg-white p-10 rounded-[2.5rem] shadow-2xl relative z-10 space-y-8 border border-slate-100 flex flex-col items-center">
+            <div className="relative">
+              <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-[1.5rem] flex items-center justify-center shadow-lg shadow-indigo-200">
+                <Compass className="text-white" size={40} />
+              </div>
+              {/* Loading ring overlay */}
+              <div className="absolute -inset-2 border-4 border-indigo-200 rounded-[2rem] animate-spin" style={{borderTopColor: 'transparent', animationDirection: 'reverse'}}></div>
+            </div>
+            
+            <div className="text-center space-y-3">
+              <h2 className="text-2xl font-serif font-bold text-slate-900">
+                {isRegistering ? (lang === 'zh' ? '正在注册...' : 'Registering...') : (lang === 'zh' ? '正在登录...' : 'Logging in...')}
+              </h2>
+              <p className="text-slate-400 text-sm">
+                {lang === 'zh' ? '正在验证身份，请稍候' : 'Verifying your identity, please wait'}
+              </p>
+            </div>
+            
+            {/* Animated dots */}
+            <div className="flex gap-2 py-4">
+              <span className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></span>
+              <span className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></span>
+              <span className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></span>
+            </div>
+            
+            {/* Progress bar */}
+            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-100 rounded-full blur-[100px] -mr-48 -mt-48 opacity-50 animate-pulse"></div>
@@ -1142,7 +1192,8 @@ Please refute, question, or deeply inquire about the user's answer based on your
                  value={loginPhone}
                  onChange={(e) => setLoginPhone(e.target.value)}
                  maxLength={11}
-                 className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
+                 disabled={isAuthLoading}
+                 className={`w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium ${isAuthLoading ? 'opacity-50' : ''}`}
                />
             </div>
             {/* 密码输入 */}
@@ -1154,7 +1205,8 @@ Please refute, question, or deeply inquire about the user's answer based on your
                  value={loginPassword}
                  onChange={(e) => setLoginPassword(e.target.value)}
                  onKeyDown={(e) => e.key === 'Enter' && handleLogin(loginPhone, loginPassword)}
-                 className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
+                 disabled={isAuthLoading}
+                 className={`w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium ${isAuthLoading ? 'opacity-50' : ''}`}
                />
             </div>
             {/* 验证码输入（仅注册时显示） */}
@@ -1168,12 +1220,13 @@ Please refute, question, or deeply inquire about the user's answer based on your
                     value={verifyCode}
                     onChange={(e) => setVerifyCode(e.target.value)}
                     maxLength={6}
-                    className="w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium"
+                    disabled={isAuthLoading}
+                    className={`w-full pl-12 pr-5 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-100 focus:bg-white rounded-2xl outline-none transition-all text-sm font-medium ${isAuthLoading ? 'opacity-50' : ''}`}
                   />
                 </div>
                 <button 
                   onClick={handleSendCode}
-                  disabled={countdown > 0}
+                  disabled={countdown > 0 || isAuthLoading}
                   className="px-4 bg-indigo-600 text-white rounded-2xl font-bold text-sm hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   {countdown > 0 ? `${countdown}s` : t.sendCodeBtn}
@@ -1185,7 +1238,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
           <div className="space-y-4">
             <button 
               onClick={() => isRegistering ? handleRegister(loginPhone, loginPassword, verifyCode) : handleLogin(loginPhone, loginPassword)}
-              disabled={!loginPhone || !loginPassword}
+              disabled={!loginPhone || !loginPassword || isAuthLoading}
               className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ArrowRight size={20} />
@@ -1196,7 +1249,8 @@ Please refute, question, or deeply inquire about the user's answer based on your
             <div className="text-center">
               <button 
                 onClick={() => { setIsRegistering(!isRegistering); setVerifyCode(''); }}
-                className="text-sm text-indigo-600 hover:text-indigo-800"
+                disabled={isAuthLoading}
+                className={`text-sm text-indigo-600 hover:text-indigo-800 ${isAuthLoading ? 'opacity-50' : ''}`}
               >
                 {isRegistering 
                   ? (lang === 'zh' ? '已有账号？立即登录' : 'Already have an account? Login')
@@ -1211,11 +1265,11 @@ Please refute, question, or deeply inquire about the user's answer based on your
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => setState('landing')} className="py-3 px-4 bg-green-50 text-green-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-100 transition-colors">
+              <button onClick={() => setState('landing')} disabled={isAuthLoading} className={`py-3 px-4 bg-green-50 text-green-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-100 transition-colors ${isAuthLoading ? 'opacity-50' : ''}`}>
                 <MessageSquare size={18} />
                 {t.wechatLogin}
               </button>
-              <button onClick={handleGuestLogin} className="py-3 px-4 bg-slate-50 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors">
+              <button onClick={handleGuestLogin} disabled={isAuthLoading} className={`py-3 px-4 bg-slate-50 text-slate-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors ${isAuthLoading ? 'opacity-50' : ''}`}>
                 <User size={18} />
                 {t.guestLogin}
               </button>
@@ -1791,32 +1845,39 @@ Please refute, question, or deeply inquire about the user's answer based on your
             {/* 6. 核心剖析 (Essence) - 放最后 */}
             <div className="w-full max-w-3xl py-10 space-y-10 relative z-10">
               <div className="text-indigo-400 font-black tracking-[0.4em] text-[10px] uppercase text-center">核心剖析 / Essence</div>
-              <div className="space-y-10 px-8 border-l-4 border-indigo-500/10">
-                <p className="text-3xl md:text-4xl font-bold text-slate-900 leading-tight font-serif italic">
-                  {heroSentence}
-                </p>
-                <div className="space-y-10">
+              <div className="space-y-10">
+                {/* 主句 - 诗意展示 */}
+                <div className="relative p-6 bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-3xl">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-indigo-500 via-purple-500 to-pink-500 rounded-full"></div>
+                  <p className="text-xl md:text-2xl font-serif italic text-slate-800 leading-relaxed pl-6">
+                    {heroSentence}
+                  </p>
+                </div>
+                
+                {/* 详细分析 - 分段展示 */}
+                <div className="flex flex-col gap-6">
                   {deepAnalysis.map((para, i) => {
-                    // 根据段落内容生成子标题
                     const subTitles = [
-                      "存在的觉醒",
-                      "行动的哲学",
-                      "意义的追寻",
-                      "自由的边界",
-                      "价值的重塑"
+                      "🌙 存在的觉醒",
+                      "⚡ 行动的哲学", 
+                      "✨ 意义的追寻",
+                      "🌀 自由的边界",
+                      "💎 价值的重塑"
                     ];
                     const subTitle = subTitles[i % subTitles.length];
                     return (
-                      <div key={i} className="group">
-                        <div className="flex items-center gap-4 mb-4">
-                          <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
-                            {i + 1}
+                      <div key={i} className="group relative p-6 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg hover:border-indigo-100 transition-all duration-300">
+                        <div className="flex items-start gap-4">
+                          <span className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0 mt-1 group-hover:scale-110 transition-transform">{i + 1}</span>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className="text-sm font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{subTitle}</span>
+                            </div>
+                            <p className="text-base md:text-lg text-slate-600 leading-8 font-light">
+                              {para}
+                            </p>
                           </div>
-                          <h4 className="text-lg font-bold text-slate-800 tracking-wide">{subTitle}</h4>
                         </div>
-                        <p className="text-lg md:text-xl text-slate-600 leading-[1.8] font-heiti opacity-90 pl-14 border-l-2 border-indigo-100 group-hover:border-indigo-300 transition-all duration-300">
-                          {para}
-                        </p>
                       </div>
                     );
                   })}
@@ -1933,6 +1994,175 @@ Please refute, question, or deeply inquire about the user's answer based on your
         }}
         currentHistoryId={currentHistoryId}
       />
+
+      {/* Settings Overlay */}
+      {showSettings && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 space-y-8 relative">
+            <button onClick={() => setShowSettings(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 transition-colors"><X size={24} /></button>
+            
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-2"><Settings size={24}/></div>
+              <h3 className="text-2xl font-serif font-bold text-slate-900">{t.settingsTitle}</h3>
+            </div>
+
+            <div className="space-y-6">
+              {/* 账号信息 */}
+              {user && (
+                <div className="bg-indigo-50 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
+                      <User size={20} />
+                    </div>
+                    <div>
+                      <p className="text-xs text-indigo-400 uppercase font-bold">{t.accountInfo}</p>
+                      <p className="text-sm font-bold text-slate-800">{user.username || user.email || '用户'}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      onClick={() => setShowEditProfile(true)}
+                      className="py-2.5 bg-white text-indigo-600 rounded-xl font-bold text-sm hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Key size={16} />
+                      {t.editProfile}
+                    </button>
+                    <button 
+                      onClick={() => {
+                        localStorage.removeItem('user');
+                        setUser(null);
+                        setState('auth');
+                        setShowSettings(false);
+                      }}
+                      className="py-2.5 bg-white text-red-600 rounded-xl font-bold text-sm hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                    >
+                      <LogOut size={16} />
+                      {t.logout}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Language */}
+              <div className="space-y-3">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block">Language / 语言</label>
+                  <div className="flex bg-slate-100 p-1 rounded-xl">
+                    <button onClick={() => setLang('zh')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${lang === 'zh' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>中文</button>
+                    <button onClick={() => setLang('en')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${lang === 'en' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400'}`}>English</button>
+                  </div>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-2 space-y-3">
+                  <button onClick={() => saveSettings(settings)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-lg hover:bg-black transition-all">
+                    {t.saveBtn}
+                  </button>
+                  {/* 切换账号按钮 */}
+                  {!user && (
+                    <button 
+                      onClick={() => { setShowSettings(false); setState('auth'); }} 
+                      className="w-full py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                    >
+                      <LogIn size={16} />
+                      {t.switchAccount}
+                    </button>
+                  )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 修改资料弹窗 */}
+      {showEditProfile && user && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl p-6 space-y-6">
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-slate-900">{t.editProfile}</h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-slate-400 uppercase font-bold">{lang === 'zh' ? '用户名' : 'Username'}</label>
+                <input 
+                  type="text" 
+                  defaultValue={user.username || ''}
+                  id="editUsername"
+                  className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-indigo-100 rounded-xl outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 uppercase font-bold">{lang === 'zh' ? '新密码' : 'New Password'}</label>
+                <input 
+                  type="password" 
+                  placeholder={lang === 'zh' ? '留空则不修改' : 'Leave empty to keep current'}
+                  id="editPassword"
+                  className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-indigo-100 rounded-xl outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowEditProfile(false)}
+                className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold"
+              >
+                {t.cancel}
+              </button>
+              <button 
+                onClick={() => {
+                  // TODO: 调用后端 API 更新用户信息
+                  alert(lang === 'zh' ? '功能开发中...' : 'Coming soon...');
+                  setShowEditProfile(false);
+                }}
+                className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold"
+              >
+                {t.saveProfile}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIP/捐赠弹窗 */}
+      {showVIP && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+          <div className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl p-6 space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 mx-auto bg-indigo-50 rounded-full flex items-center justify-center">
+                <Zap size={32} className="text-indigo-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">{lang === 'zh' ? '获取更多先令' : 'Get More Shi ling'}</h3>
+              <p className="text-sm text-slate-400">{lang === 'zh' ? '继续你的哲学探索之旅' : 'Continue your philosophical journey'}</p>
+            </div>
+            
+            <div className="space-y-3">
+              <button className="w-full p-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-between">
+                <span className="flex items-center gap-2"><Zap size={18} className="text-amber-400" /> {lang === 'zh' ? '基础包' : 'Basic'}</span>
+                <span>{lang === 'zh' ? '¥19 / 200' : '$3 / 200'}</span>
+              </button>
+              <button className="w-full p-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-between">
+                <span className="flex items-center gap-2"><Sparkles size={18} className="text-purple-400" /> {lang === 'zh' ? '进阶包' : 'Pro'}</span>
+                <span>{lang === 'zh' ? '¥29 / 350' : '$5 / 350'}</span>
+              </button>
+              <button className="w-full p-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-between">
+                <span className="flex items-center gap-2"><Crown size={18} className="text-amber-400" /> {lang === 'zh' ? '豪华包' : 'Premium'}</span>
+                <span>{lang === 'zh' ? '¥49 / 650' : '$8 / 650'}</span>
+              </button>
+              <button className="w-full p-3 bg-slate-50 text-slate-500 rounded-xl font-medium hover:bg-slate-100 transition-all text-center">
+                {lang === 'zh' ? '☕ 捐赠支持开发者' : '☕ Donate to Support'}
+              </button>
+            </div>
+
+            <button 
+              onClick={() => setShowVIP(false)}
+              className="w-full py-3 text-slate-400 font-medium hover:text-slate-600 transition-all"
+            >
+              {t.cancel}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

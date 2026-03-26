@@ -25,6 +25,7 @@ interface ChatSidebarProps {
   onStartNew: () => void;
   onOpenSettings: () => void;
   onOpenAllModes: () => void;
+  onOpenPhilosophers: () => void;
   onReset: () => void;
   onChangeLang: () => void;
 }
@@ -41,6 +42,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   onStartNew,
   onOpenSettings,
   onOpenAllModes,
+  onOpenPhilosophers,
   onReset,
   onChangeLang
 }) => {
@@ -219,6 +221,15 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           >
             <LayoutGrid size={16} style={{ color: slotMachineColors.accent }} />
             <span>{isZh ? '查看全部问题' : 'View All Themes'}</span>
+          </button>
+
+          <button 
+            onClick={() => { onOpenPhilosophers?.(); }}
+            className="w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-sm font-medium"
+            style={{ background: slotMachineColors.card, color: slotMachineColors.text }}
+          >
+            <Sparkles size={16} style={{ color: slotMachineColors.accent }} />
+            <span>{isZh ? '哲学家库' : 'Philosophers'}</span>
           </button>
 
           <button 
