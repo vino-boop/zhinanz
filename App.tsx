@@ -10,7 +10,7 @@ import { HistorySidebar, saveToHistory } from './components/HistorySidebar';
 import { ChatSidebar } from './components/ChatSidebar';
 import { PhilosophersLibrary } from './components/PhilosophersLibrary';
 import { PhilosopherTopicSelect } from './components/PhilosopherTopicSelect';
-import { INITIAL_QUESTION_POOL } from './constants/questions';
+import { INITIAL_QUESTION_POOL, initializeQuestionPool } from './constants/questions';
 import { 
   Compass, Send, RefreshCw, Sparkles, ArrowRight, Quote, Languages, Scale, 
   ScrollText, FileImage, Layers, Zap, Dna, Target, Timer, Infinity as InfinityIcon, AlertCircle, Settings, X, Key,
@@ -320,29 +320,69 @@ const App: React.FC = () => {
           const loadedMessages: Message[] = [];
           
           res.conversations.forEach((conv: any) => {
-            if (conv.judge_question) {
-              loadedMessages.push({
-                id: `${conv.id}-q`,
-                role: 'user',
-                content: conv.judge_question,
-                timestamp: new Date(conv.created_at).getTime()
-              });
-            }
-            if (conv.user_answer) {
-              loadedMessages.push({
-                id: `${conv.id}-a`,
-                role: 'assistant',
-                content: conv.user_answer,
-                timestamp: new Date(conv.created_at).getTime() + 1
-              });
-            }
-            if (conv.philosopher_response) {
-              loadedMessages.push({
-                id: `${conv.id}-p`,
-                role: 'assistant',
-                content: conv.philosopher_response,
-                timestamp: new Date(conv.created_at).getTime() + 2
-              });
+            // 优先从 conversation_json 读取（新版格式）
+            if (conv.conversation_json) {
+              try {
+                const exchanges = typeof conv.conversation_json === 'string' 
+                  ? JSON.parse(conv.conversation_json) 
+                  : conv.conversation_json;
+                exchanges.forEach((ex: any, idx: number) => {
+                  if (ex.judge_question) {
+                    loadedMessages.push({
+                      id: `${conv.id}-q-${idx}`,
+                      role: 'user',
+                      content: ex.judge_question,
+                      timestamp: ex.timestamp || (new Date(conv.created_at).getTime() + idx * 3)
+                    });
+                  }
+                  if (ex.user_answer) {
+                    loadedMessages.push({
+                      id: `${conv.id}-a-${idx}`,
+                      role: 'assistant',
+                      content: ex.user_answer,
+                      timestamp: (ex.timestamp || new Date(conv.created_at).getTime()) + idx * 3 + 1
+                    });
+                  }
+                  if (ex.philosopher_response) {
+                    loadedMessages.push({
+                      id: `${conv.id}-p-${idx}`,
+                      role: 'assistant',
+                      speaker: 'Philosopher',
+                      content: ex.philosopher_response,
+                      timestamp: (ex.timestamp || new Date(conv.created_at).getTime()) + idx * 3 + 2
+                    });
+                  }
+                });
+              } catch (e) {
+                console.error('解析conversation_json失败:', e);
+              }
+            } else {
+              // 兼容旧格式：直接从列读取
+              if (conv.judge_question) {
+                loadedMessages.push({
+                  id: `${conv.id}-q`,
+                  role: 'user',
+                  content: conv.judge_question,
+                  timestamp: new Date(conv.created_at).getTime()
+                });
+              }
+              if (conv.user_answer) {
+                loadedMessages.push({
+                  id: `${conv.id}-a`,
+                  role: 'assistant',
+                  content: conv.user_answer,
+                  timestamp: new Date(conv.created_at).getTime() + 1
+                });
+              }
+              if (conv.philosopher_response) {
+                loadedMessages.push({
+                  id: `${conv.id}-p`,
+                  role: 'assistant',
+                  speaker: 'Philosopher',
+                  content: conv.philosopher_response,
+                  timestamp: new Date(conv.created_at).getTime() + 2
+                });
+              }
             }
           });
           
@@ -525,19 +565,25 @@ const App: React.FC = () => {
     setDialoguePhase('judge'); // 开始审判机阶段
     setSessionId(`session-${Date.now()}`); // 创建新的session ID
     
-    // 开始新对话时保存历史记录
-    const modeLabel = MODE_DEFINITIONS.find(def => def.id === m)?.id || m;
-    const { saveToHistory } = await import('./components/HistorySidebar');
-    const newHistoryId = saveToHistory(m, modeLabel, 0, '', undefined, false);
-    console.log('新对话已保存到历史记录:', newHistoryId);
-    // 刷新历史记录
-    setHistoryRefreshKey(prev => prev + 1);
-    
     try {
+      // 确保问题池已加载（优先从数据库API，失败则用本地）
+      await initializeQuestionPool();
+      
       const pool = INITIAL_QUESTION_POOL[m];
+      if (!pool || pool.length === 0) {
+        throw new Error('问题池为空，请检查网络后重试');
+      }
       const randomQ = pool[Math.floor(Math.random() * pool.length)];
       const startContent = `START:${randomQ.content}|SUGGESTIONS:${JSON.stringify(randomQ.suggestions)}`;
       startContentRef.current = startContent;
+      
+      // 开始新对话时保存历史记录（移动到获取问题之后）
+      const modeLabel = MODE_DEFINITIONS.find(def => def.id === m)?.id || m;
+      const { saveToHistory } = await import('./components/HistorySidebar');
+      const newHistoryId = saveToHistory(m, modeLabel, randomQ.content, 0, '', undefined, false);
+      console.log('新对话已保存到历史记录:', newHistoryId);
+      // 刷新历史记录
+      setHistoryRefreshKey(prev => prev + 1);
       
       const turnId = `start-${Date.now()}`;
       const judgeMessageId = `${turnId}-0`; // 固定消息ID
@@ -614,6 +660,11 @@ const App: React.FC = () => {
     console.log('=== 开始处理用户回答 ===');
     console.log('用户回答:', textToSend);
     console.log('哲学家模式:', philosopherMode);
+    
+    // 哲学家名称（用于普通模式下的哲学家回复保存）
+    const philosopherName = selectedPhilosopher 
+      ? (lang === 'zh' ? selectedPhilosopher.display_name_zh : (selectedPhilosopher.display_name_en || selectedPhilosopher.name))
+      : '';
     
     try {
       // ===== 哲学家一对一模式 =====
@@ -700,7 +751,6 @@ Please refute, question, or deeply inquire about the user's answer based on your
               round: questionCount + 1,
               judge_question: philosopherTopic || '',
               user_answer: textToSend,
-              judge_response: '',
               philosopher_response: philosopherResponses.join('\n\n')
             });
           } catch (e) { console.error('保存对话失败:', e); }
@@ -762,6 +812,9 @@ Please refute, question, or deeply inquire about the user's answer based on your
       setDialoguePhase('philosopher');
       console.log('=== 开始哲学家回复阶段 ===');
       
+      // 收集本轮哲学家的名字（用于后续过滤）
+      let philosopherNamesThisRound: string[] = [];
+      
       try {
         // 获取哲学家回复
         const philosopherStream = streamPhilosopherResponse(
@@ -779,6 +832,10 @@ Please refute, question, or deeply inquire about the user's answer based on your
             // 每条消息单独添加，带延迟
             for (let i = 0; i < newPhilosopherMessages.length; i++) {
               const msg = newPhilosopherMessages[i];
+              // 收集哲学家名字（用于后续过滤）
+              if (msg.speaker && !philosopherNamesThisRound.includes(msg.speaker)) {
+                philosopherNamesThisRound.push(msg.speaker);
+              }
               setMessages(prev => [...prev, { ...msg, id: `phil-${Date.now()}-${i}` }]);
               
               // 滚动到底部
@@ -794,14 +851,17 @@ Please refute, question, or deeply inquire about the user's answer based on your
           }
         }
         
-        console.log('哲学家回复完成');
+        console.log('哲学家回复完成, 本轮哲学家:', philosopherNamesThisRound);
         
         // 保存对话历史到数据库
         try {
           // 获取本轮对话的相关消息
           const judgeMsgs = messages.filter(m => m.speaker === 'Judge' || m.speaker === '审判机');
           const userMsgs = messages.filter(m => m.role === 'user');
-          const philosopherMsgs = messages.filter(m => m.speaker === philosopherName);
+          // 使用本轮实际出现的哲学家名字过滤，而不是selectedPhilosopher
+          const philosopherMsgs = messages.filter(m => 
+            philosopherNamesThisRound.includes(m.speaker)
+          );
           
           const lastJudgeQuestion = judgeMsgs.length > 0 ? judgeMsgs[judgeMsgs.length - 1].content : '';
           const lastUserAnswer = userMsgs.length > 0 ? userMsgs[userMsgs.length - 1].content : textToSend;
@@ -817,7 +877,6 @@ Please refute, question, or deeply inquire about the user's answer based on your
             round: questionCount + 1,
             judge_question: lastJudgeQuestion,
             user_answer: lastUserAnswer,
-            judge_response: lastJudgeResponse,
             philosopher_response: lastPhilosopherResponse
           });
           console.log('对话历史已保存到数据库');
@@ -958,7 +1017,9 @@ Please refute, question, or deeply inquire about the user's answer based on your
       const { saveToHistory } = await import('./components/HistorySidebar');
       const modeLabel = getModeLabel(mode);
       const lastMessage = messages[messages.length - 1]?.content?.slice(0, 50) || '';
-      saveToHistory(mode, modeLabel, messages.filter(m => m.role === 'user').length, lastMessage, res, true);
+      // 从 startContentRef 提取实际问题标题
+      const questionTitle = startContentRef.current?.split('|')[0]?.replace('START:', '') || modeLabel;
+      saveToHistory(mode, modeLabel, questionTitle, messages.filter(m => m.role === 'user').length, lastMessage, res, true);
       
     } catch (e: any) { 
       console.error(e);
@@ -1920,30 +1981,8 @@ Please refute, question, or deeply inquire about the user's answer based on your
         onChangeLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
       />
 
-      {/* 顶部导航栏 */}
-      <div className="fixed top-0 left-0 right-0 h-16 bg-white/90 backdrop-blur border-b border-slate-100 z-40 flex items-center justify-between px-4">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setShowSidebar(!showSidebar)} 
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-            title={showSidebar ? '隐藏侧边栏' : '显示侧边栏'}
-          >
-            {showSidebar ? <X size={20} className="text-slate-600"/> : <Menu size={20} className="text-slate-600"/>}
-          </button>
-          <div className="flex items-center gap-2">
-            <Compass size={24} className="text-indigo-600" />
-            <span className="font-serif font-bold text-slate-900">{t.title}</span>
-          </div>
-        </div>
-        {mode && (
-          <div className="flex items-center gap-2 px-3 py-1 bg-indigo-50 rounded-full">
-            <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{mode}</span>
-          </div>
-        )}
-      </div>
-
       {/* 聊天内容区 */}
-      <main ref={scrollRef} className="flex-1 overflow-y-auto pt-20 pb-48">
+      <main ref={scrollRef} className="flex-1 overflow-y-auto pt-4 pb-48">
         <div className="max-w-3xl mx-auto px-4">
           {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} onTyping={handleTyping} />)}
           {error && <div className="p-8 bg-red-50 rounded-2xl text-center space-y-4 max-w-md mx-auto border border-red-100">
@@ -2162,6 +2201,40 @@ Please refute, question, or deeply inquire about the user's answer based on your
             </button>
           </div>
         </div>
+      )}
+
+      {/* View All Overlay - 问题库 */}
+      {showAllModes && (
+        <div className="fixed inset-0 z-[100] bg-slate-50 overflow-y-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
+           <div className="max-w-6xl mx-auto p-8 space-y-8">
+             <div className="flex justify-between items-center">
+               <h2 className="text-3xl font-serif font-bold text-slate-900">{t.allModesTitle}</h2>
+               <button onClick={() => setShowAllModes(false)} className="p-3 bg-white shadow-sm rounded-full hover:bg-slate-100"><X size={24}/></button>
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pb-20">
+              {MODE_DEFINITIONS.map(m => (
+                <button key={m.id} onClick={() => { selectMode(m.id as DiscoveryMode); setShowAllModes(false); }} className="group p-6 bg-white rounded-[2rem] shadow-sm hover:shadow-xl transition-all text-left space-y-4 border border-transparent hover:border-slate-100 flex flex-col h-full">
+                  <div className={`w-14 h-14 ${m.bg} ${m.color} rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform`}><m.icon size={28}/></div>
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-bold text-slate-800">{getModeLabel(m.id as DiscoveryMode)}</h3>
+                    <p className="text-slate-400 text-xs leading-relaxed">{getModeDesc(m.id as DiscoveryMode)}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+           </div>
+        </div>
+      )}
+
+      {/* 哲学家库 Overlay */}
+      {showPhilosophers && (
+        <PhilosophersLibrary 
+          language={lang}
+          onClose={() => setShowPhilosophers(false)}
+          onSelectPhilosopher={(philosopher) => {
+            setSelectedPhilosopher(philosopher);
+          }}
+        />
       )}
     </div>
   );

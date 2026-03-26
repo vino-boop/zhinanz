@@ -8,9 +8,13 @@ interface BackendQuestion {
   id: number;
   content: string;
   philosopher: string;
-  category: string;
+  mode: string;
+  suggestions?: string[];
   usageCount: number;
   status: string;
+  question_group?: string;
+  question_prompt?: string;
+  question_order?: number;
 }
 
 interface BackendPhilosopher {
@@ -87,26 +91,12 @@ export function clearCache() {
 export async function getQuestionPoolByMode(mode: DiscoveryMode): Promise<QuestionPoolItem[]> {
   const questions = await fetchQuestions();
   
-  // 分类映射：DiscoveryMode -> 问题分类
-  const modeToCategory: Record<DiscoveryMode, string[]> = {
-    LIFE_MEANING: ['人生', '意义', '存在', '价值'],
-    JUSTICE: ['正义', '道德', '公平', '法律'],
-    SELF_IDENTITY: ['自我', '身份', '意识', '记忆'],
-    FREE_WILL: ['自由', '意志', '选择', '责任'],
-    SIMULATION: ['模拟', '现实', '真实', '虚拟'],
-    OTHER_MINDS: ['他者', '意识', '心灵', '共情'],
-    LANGUAGE: ['语言', '意义', '沟通', '符号'],
-    SCIENCE: ['科学', '真理', '知识', '理性']
-  };
-  
-  const categories = modeToCategory[mode] || [];
-  
-  // 筛选对应分类的问题，如果没有则返回全部
+  // 筛选对应模式的问题
   let filteredQuestions = questions.filter(q => 
-    q.status === 'active' && q.category && categories.some(cat => q.category.includes(cat))
+    q.status === 'active' && q.mode === mode
   );
   
-  // 如果没有匹配的，返回所有活跃问题
+  // 如果没有匹配的，返回所有活跃问题（兼容旧数据）
   if (filteredQuestions.length === 0) {
     filteredQuestions = questions.filter(q => q.status === 'active');
   }
@@ -114,10 +104,12 @@ export async function getQuestionPoolByMode(mode: DiscoveryMode): Promise<Questi
   // 转换为前端需要的格式
   return filteredQuestions.map(q => ({
     content: q.content,
-    suggestions: [
-      `选择A：${q.philosopher}的观点 [SEP] Choice A`,
-      `选择B：另一种视角 [SEP] Choice B`
-    ]
+    suggestions: Array.isArray(q.suggestions) && q.suggestions.length > 0
+      ? q.suggestions
+      : [
+          `选择A：${q.philosopher || '哲学家A'}的观点 [SEP] Choice A`,
+          `选择B：另一种视角 [SEP] Choice B`
+        ]
   }));
 }
 

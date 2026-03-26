@@ -60,7 +60,6 @@ export const philosophyApi = {
     round: number;
     judge_question: string;
     user_answer: string;
-    judge_response: string;
     philosopher_response: string;
   }) => fetchApi<{ success: boolean; id: number }>('/conversations', {
     method: 'POST',

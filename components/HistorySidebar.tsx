@@ -7,6 +7,7 @@ interface ChatHistory {
   id: string;
   mode: DiscoveryMode;
   modeLabel: string;
+  questionTitle: string; // 实际问题名称，如"电车难题"
   questionCount: number;
   lastMessage: string;
   timestamp: number;
@@ -57,6 +58,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
             id: h.sessionId,
             mode: h.mode as DiscoveryMode,
             modeLabel: h.mode,
+            questionTitle: h.questionTitle || h.mode,
             questionCount: h.questionCount || 0,
             lastMessage: h.lastMessage || '',
             timestamp: new Date(h.createdAt).getTime(),
@@ -176,7 +178,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-slate-800 truncate">{h.modeLabel}</p>
+                            <p className="font-medium text-slate-800 truncate">{h.questionTitle || h.modeLabel}</p>
                             <p className="text-xs text-slate-400 mt-1">{h.questionCount} {isZh ? '个问题' : 'questions'}</p>
                           </div>
                           <div className="flex items-center gap-1">
@@ -215,7 +217,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-slate-800 truncate">{h.modeLabel}</p>
+                            <p className="font-medium text-slate-800 truncate">{h.questionTitle || h.modeLabel}</p>
                             <p className="text-xs text-slate-400 mt-1">{h.questionCount} {isZh ? '个问题' : 'questions'}</p>
                           </div>
                           <div className="flex items-center gap-1">
@@ -257,6 +259,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
 export const saveToHistory = (
   mode: DiscoveryMode,
   modeLabel: string,
+  questionTitle: string,
   questionCount: number,
   lastMessage: string,
   result?: DiscoveryResult,
@@ -267,6 +270,7 @@ export const saveToHistory = (
     id,
     mode,
     modeLabel,
+    questionTitle,
     questionCount,
     lastMessage,
     timestamp: Date.now(),
