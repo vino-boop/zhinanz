@@ -1,6 +1,6 @@
 // 哲思模块 API 客户端 - 用于从后端获取数据
 // 配置后端API地址
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://backend.vinolab.tech';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://vinolab.tech';
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {

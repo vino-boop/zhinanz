@@ -26,7 +26,7 @@ function getApiKeyFromStorage(): { apiKey: string; provider: string } {
 // 从后端 API 获取 API Key
 async function getApiKeyFromBackend(): Promise<{ apiKey: string; provider: string }> {
   try {
-    const response = await fetch('https://backend.vinolab.tech/api/overview/apikey/哲思');
+    const response = await fetch('https://vinolab.tech/api/overview/apikey/哲思');
     if (response.ok) {
       const data = await response.json();
       if (data.api_key) {
