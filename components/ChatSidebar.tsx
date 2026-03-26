@@ -82,7 +82,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       // 如果用户已登录，从数据库加载
       if (user && user.id) {
         try {
-          const res = await fetch(`https://backend.vinolab.tech/api/philosophy/user-histories/${user.id}`);
+          const res = await fetch(`https://vinolab.tech/api/philosophy/user-histories/${user.id}`);
           const data = await res.json();
           if (data.history && data.history.length > 0) {
             // 转换数据库历史为本地格式

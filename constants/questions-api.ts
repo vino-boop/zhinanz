@@ -2,7 +2,7 @@
 import { DiscoveryMode, QuestionPoolItem } from "../types";
 
 // API 基础地址 - 调用云端服务器
-const API_BASE = 'https://backend.vinolab.tech';
+const API_BASE = 'https://vinolab.tech';
 
 interface BackendQuestion {
   id: number;
