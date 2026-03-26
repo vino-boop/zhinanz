@@ -298,20 +298,68 @@ const App: React.FC = () => {
   };
 
   // 处理点击历史记录 - 加载历史对话或报告
-  const handleSelectHistory = (history: any) => {
+  const handleSelectHistory = async (history: any) => {
     console.log('选中历史记录:', history);
+    
+    // 使用 sessionId 作为会话ID
+    const sessionId = history.sessionId || history.id;
+    const userId = user?.id;
+    
     if (history.isComplete && history.result) {
       // 有完整报告 - 跳转到报告页面
       setResult(history.result);
       setMode(history.mode);
       setState('result');
+    } else if (sessionId && userId) {
+      // 加载对话内容
+      try {
+        const res: any = await philosophyApi.getConversations(String(userId), sessionId);
+        if (res.conversations && res.conversations.length > 0) {
+          // 构建消息数组
+          const loadedMessages: Message[] = [];
+          
+          res.conversations.forEach((conv: any) => {
+            if (conv.judge_question) {
+              loadedMessages.push({
+                id: `${conv.id}-q`,
+                role: 'user',
+                content: conv.judge_question,
+                timestamp: new Date(conv.created_at).getTime()
+              });
+            }
+            if (conv.user_answer) {
+              loadedMessages.push({
+                id: `${conv.id}-a`,
+                role: 'assistant',
+                content: conv.user_answer,
+                timestamp: new Date(conv.created_at).getTime() + 1
+              });
+            }
+            if (conv.philosopher_response) {
+              loadedMessages.push({
+                id: `${conv.id}-p`,
+                role: 'assistant',
+                content: conv.philosopher_response,
+                timestamp: new Date(conv.created_at).getTime() + 2
+              });
+            }
+          });
+          
+          setMessages(loadedMessages);
+        }
+        setMode(history.mode);
+        setState('chatting');
+      } catch (error) {
+        console.error('加载对话失败:', error);
+        setMode(history.mode);
+        setState('chatting');
+      }
     } else {
-      // 只有对话记录 - 跳转到对话页面（需要后端支持加载对话内容）
-      // TODO: 从数据库加载对话内容
       setMode(history.mode);
       setState('chatting');
     }
-    setCurrentHistoryId(history.id);
+    
+    setCurrentHistoryId(sessionId);
     setShowSidebar(false);
   };
 
