@@ -133,7 +133,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
       />
       
       {/* 侧边栏 */}
-      <div className="fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-50 flex flex-col animate-in slide-in-from-right duration-300">
+      <div className={`fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-50 flex flex-col transition-all duration-300 ease-in-out transform ${isOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}`}>
         {/* 头部 */}
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
