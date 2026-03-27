@@ -438,6 +438,10 @@ const App: React.FC = () => {
           });
           
           setMessages(loadedMessages);
+          
+          // 从数据库的 round 字段计算 questionCount（round 存的是 questionCount + 1）
+          const maxRound = Math.max(0, ...res.conversations.map((c: any) => c.round || 0));
+          setQuestionCount(maxRound > 0 ? maxRound - 1 : 0);
         }
       } catch (error) {
         console.error('加载对话失败:', error);
@@ -2072,9 +2076,8 @@ Please refute, question, or deeply inquire about the user's answer based on your
         isOpen={showHistory} 
         onClose={() => setShowHistory(false)}
         onLoadHistory={(history) => {
-          // 加载历史记录的逻辑
-          console.log('Load history:', history);
           setShowHistory(false);
+          handleSelectHistory(history);
         }}
         currentHistoryId={currentHistoryId}
       />
