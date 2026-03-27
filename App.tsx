@@ -304,6 +304,8 @@ const App: React.FC = () => {
 
   // 监听 isLoading 从 true 变为 false，显示生成完成提示
   const prevIsLoadingRef = useRef(false);
+  // 用于追踪上一条哲学家回复（用于流式过程中逐条保存）
+  const prevPhilosopherContentRef = useRef<string | null>(null);
   useEffect(() => {
     if (prevIsLoadingRef.current && !isLoading) {
       setShowGenComplete(true);
@@ -342,7 +344,8 @@ const App: React.FC = () => {
     // HistorySidebar 把 session_id 映射到 id
     const sessionId = history.sessionId || history.id;
     // 用户ID：优先用 username，其次 id，最后 guest
-    const userId = user?.username || user?.id || localStorage.getItem('guestUserId') || 'guest';
+    // 注意：必须和 saveConversation 保持一致，saveConversation 用 user?.username || user?.id
+    const userId = user?.username ? String(user.username) : (user?.id ? String(user.id) : localStorage.getItem('guestUserId') || 'guest');
     
     // 设置 sessionId 状态，这样继续对话时能正确保存
     setSessionId(sessionId);
@@ -386,55 +389,76 @@ const App: React.FC = () => {
         let res: any = await philosophyApi.getConversations(String(userId), sessionId);
         console.log('API getConversations 返回:', res, 'sessionId查询:', sessionId, 'userId:', userId);
         
-        // 如果 sessionId 是 history-xxx 格式（旧本地历史），用 mode + 时间范围匹配
+        // 如果 sessionId 是 history-xxx 格式（旧本地历史），用 mode + userId 匹配最接近的对话
         if ((!res.conversations || res.conversations.length === 0) && sessionId.startsWith('history-') && history.mode) {
-          console.log('sessionId 无数据(history-格式)，尝试 mode + 时间查询');
-          const histTime = history.timestamp;
-          // 往前推30秒到往后30秒的范围
-          const after = histTime - 30000;
-          const before = histTime + 30000;
-          // 查询该用户在 mode 下、created_at 在 +-30秒范围内的最新对话
-          const searchRes: any = await philosophyApi.getConversationsByMode(String(userId), history.mode, after);
-          if (searchRes.conversations && searchRes.conversations.length > 0) {
-            res = { conversations: searchRes.conversations };
-            console.log('Fallback 匹配到对话:', res.conversations[0].id, 'session_id:', res.conversations[0].session_id);
+          console.log('sessionId 无数据(history-格式)，尝试 mode + userId 查询');
+          const allRes: any = await philosophyApi.getConversationsByMode(String(userId), history.mode, 0);
+          if (allRes.conversations && allRes.conversations.length > 0) {
+            // 找同 mode 的最新记录
+            const matched = allRes.conversations
+              .filter((c: any) => c.mode === history.mode)
+              .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+            if (matched) {
+              res = { conversations: [matched] };
+              console.log('Fallback 匹配到对话:', matched.id, 'session_id:', matched.session_id, 'round:', matched.round);
+            }
           }
         }
         
         if (res.conversations && res.conversations.length > 0) {
           const loadedMessages: Message[] = [];
           
-          res.conversations.forEach((conv: any) => {
-            // 优先从 conversation_json 读取（新版格式）
+          // 按 round 排序，确保顺序正确
+          const sorted = [...res.conversations].sort((a, b) => (a.round || 0) - (b.round || 0));
+          
+          sorted.forEach((conv: any, convIdx: number) => {
             if (conv.conversation_json) {
               try {
                 const exchanges = typeof conv.conversation_json === 'string' 
                   ? JSON.parse(conv.conversation_json) 
                   : conv.conversation_json;
+                
                 exchanges.forEach((ex: any, idx: number) => {
+                  // Round 1 的初始问题
+                  if (idx === 0 && !ex.judge_question && conv.judge_question) {
+                    loadedMessages.push({
+                      id: `${conv.id}-q-${idx}`,
+                      role: 'assistant',
+                      speaker: undefined,
+                      content: conv.judge_question,
+                      timestamp: ex.timestamp || Date.now()
+                    });
+                  }
+                  // AI 法官问题 → role: assistant, speaker: Judge
                   if (ex.judge_question) {
                     loadedMessages.push({
                       id: `${conv.id}-q-${idx}`,
-                      role: 'user',
+                      role: 'assistant',
+                      speaker: 'Judge',
                       content: ex.judge_question,
-                      timestamp: ex.timestamp || (new Date(conv.created_at).getTime() + idx * 3)
+                      timestamp: ex.timestamp || Date.now()
                     });
                   }
+                  // 用户回答 → role: user
                   if (ex.user_answer) {
                     loadedMessages.push({
                       id: `${conv.id}-a-${idx}`,
-                      role: 'assistant',
+                      role: 'user',
                       content: ex.user_answer,
-                      timestamp: (ex.timestamp || new Date(conv.created_at).getTime()) + idx * 3 + 1
+                      timestamp: Date.now()
                     });
                   }
+                  // 哲学家回复 → 从 "哲学家名字: 回复内容" 格式中解析，每条独立显示
                   if (ex.philosopher_response) {
+                    const colonIdx = ex.philosopher_response.indexOf(': ');
+                    const speaker = colonIdx > 0 ? ex.philosopher_response.substring(0, colonIdx) : 'Philosopher';
+                    const content = colonIdx > 0 ? ex.philosopher_response.substring(colonIdx + 2) : ex.philosopher_response;
                     loadedMessages.push({
                       id: `${conv.id}-p-${idx}`,
                       role: 'assistant',
-                      speaker: 'Philosopher',
-                      content: ex.philosopher_response,
-                      timestamp: (ex.timestamp || new Date(conv.created_at).getTime()) + idx * 3 + 2
+                      speaker,
+                      content,
+                      timestamp: Date.now()
                     });
                   }
                 });
@@ -442,11 +466,12 @@ const App: React.FC = () => {
                 console.error('解析conversation_json失败:', e);
               }
             } else {
-              // 兼容旧格式：直接从列读取
+              // 兼容旧格式
               if (conv.judge_question) {
                 loadedMessages.push({
                   id: `${conv.id}-q`,
-                  role: 'user',
+                  role: 'assistant',
+                  speaker: conv.round === 1 ? undefined : 'Judge',
                   content: conv.judge_question,
                   timestamp: new Date(conv.created_at).getTime()
                 });
@@ -454,17 +479,20 @@ const App: React.FC = () => {
               if (conv.user_answer) {
                 loadedMessages.push({
                   id: `${conv.id}-a`,
-                  role: 'assistant',
+                  role: 'user',
                   content: conv.user_answer,
                   timestamp: new Date(conv.created_at).getTime() + 1
                 });
               }
               if (conv.philosopher_response) {
+                const colonIdx = conv.philosopher_response.indexOf(': ');
+                const speaker = colonIdx > 0 ? conv.philosopher_response.substring(0, colonIdx) : 'Philosopher';
+                const content = colonIdx > 0 ? conv.philosopher_response.substring(colonIdx + 2) : conv.philosopher_response;
                 loadedMessages.push({
                   id: `${conv.id}-p`,
                   role: 'assistant',
-                  speaker: 'Philosopher',
-                  content: conv.philosopher_response,
+                  speaker,
+                  content,
                   timestamp: new Date(conv.created_at).getTime() + 2
                 });
               }
@@ -473,9 +501,9 @@ const App: React.FC = () => {
           
           setMessages(loadedMessages);
           
-          // 从数据库的 round 字段计算 questionCount（round 存的是 questionCount + 1）
+          // 从数据库的 round 字段计算 questionCount（round = 已回答的问题数）
           const maxRound = Math.max(0, ...res.conversations.map((c: any) => c.round || 0));
-          setQuestionCount(maxRound > 0 ? maxRound - 1 : 0);
+          setQuestionCount(maxRound);
         }
       } catch (error) {
         console.error('加载对话失败:', error);
@@ -644,7 +672,8 @@ const App: React.FC = () => {
   const startJourney = async (m: DiscoveryMode, i: DiscoveryIntensity) => {
     setIsLoading(true); setError(null);
     setDialoguePhase('judge'); // 开始审判机阶段
-    setSessionId(`session-${Date.now()}`); // 创建新的session ID
+    const newSessionId = `session-${Date.now()}`; // 创建新的session ID
+    setSessionId(newSessionId); // 同步更新state
     
     try {
       // 确保问题池已加载（优先从数据库API，失败则用本地）
@@ -661,8 +690,8 @@ const App: React.FC = () => {
       // 开始新对话时保存历史记录（移动到获取问题之后）
       const modeLabel = getModeLabel(m);
       const { saveToHistory } = await import('./components/HistorySidebar');
-      const newHistoryId = saveToHistory(m, modeLabel, randomQ.content, 0, '', undefined, false, sessionId);
-      console.log('新对话已保存到历史记录:', newHistoryId);
+      const newHistoryId = saveToHistory(m, modeLabel, randomQ.content, 0, '', undefined, false, newSessionId);
+      console.log('新对话已保存到历史记录:', newHistoryId, 'sessionId:', newSessionId);
       // 刷新历史记录
       setHistoryRefreshKey(prev => prev + 1);
       
@@ -800,37 +829,61 @@ Please refute, question, or deeply inquire about the user's answer based on your
             }
           );
 
-          // 逐个显示哲学家消息
+          // 逐个显示哲学家消息，每条消息作为独立轮次保存
           let philosopherResponses: string[] = [];
+          let philosopherRound = 0; // 追踪哲学家消息的轮次编号
           for await (const { messages: newPhilosopherMessages } of philosopherStream) {
             console.log('收到哲学家消息:', newPhilosopherMessages);
             if (newPhilosopherMessages.length > 0) {
               for (let i = 0; i < newPhilosopherMessages.length; i++) {
                 const msg = newPhilosopherMessages[i];
                 philosopherResponses.push(msg.content);
+                philosopherRound = philosopherResponses.length; // 每条消息对应独立的 round
                 setMessages(prev => [...prev, { ...msg, speaker: philosopherName, id: `phil-${Date.now()}-${i}` }]);
                 
                 // 生成过程中不再强制滚动，让用户可以向上查看历史
                 
                 await new Promise(resolve => setTimeout(resolve, 1200));
+                
+                // 每收到一条哲学家消息，立即保存前一条到数据库（逐条保存，不遗漏）
+                if (prevPhilosopherContentRef.current !== null) {
+                  try {
+                    // philosopherResponses.length 是当前已有的条数（保存前一条的 round）
+                    await philosophyApi.saveConversation({
+                      user_id: user?.username || user?.id || 'guest',
+                      session_id: sessionId,
+                      mode: `philosopher_${philosopherName}`,
+                      round: philosopherResponses.length, // 前一条的 round = 已有条数
+                      judge_question: philosopherTopic || '',
+                      user_answer: textToSend,
+                      philosopher_response: `${philosopherName}: ${prevPhilosopherContentRef.current}`
+                    });
+                  } catch (e) { console.error('保存哲学家回复失败:', e); }
+                }
+                // 更新追踪 ref
+                prevPhilosopherContentRef.current = msg.content;
               }
             }
           }
           
           console.log('哲学家回复完成');
           
-          // 保存对话历史到数据库
-          try {
-            await philosophyApi.saveConversation({
-              user_id: user?.username || user?.id || 'guest',
-              session_id: sessionId,
-              mode: `philosopher_${philosopherName}`,
-              round: questionCount + 1,
-              judge_question: philosopherTopic || '',
-              user_answer: textToSend,
-              philosopher_response: philosopherResponses.join('\n\n')
-            });
-          } catch (e) { console.error('保存对话失败:', e); }
+          // 保存最后一条哲学家回复到数据库
+          if (prevPhilosopherContentRef.current !== null) {
+            try {
+              await philosophyApi.saveConversation({
+                user_id: user?.username || user?.id || 'guest',
+                session_id: sessionId,
+                mode: `philosopher_${philosopherName}`,
+                round: philosopherRound,
+                judge_question: philosopherTopic || '',
+                user_answer: textToSend,
+                philosopher_response: `${philosopherName}: ${prevPhilosopherContentRef.current}`
+              });
+            } catch (e) { console.error('保存最后哲学家回复失败:', e); }
+          }
+          // 重置追踪 ref
+          prevPhilosopherContentRef.current = null;
           
           setQuestionCount(prev => prev + 1);
           setDialoguePhase('waiting');
@@ -1004,7 +1057,23 @@ Please refute, question, or deeply inquire about the user's answer based on your
       currentParsedMessages = nextParsedMessages;
 
       const reachedTarget = intensity === 'QUICK' ? questionCount >= QUICK_TARGET : questionCount >= DEEP_TARGET;
-      if (finalIsDone || reachedTarget) setCanFinishEarly(true);
+      if (finalIsDone || reachedTarget) {
+        setCanFinishEarly(true);
+        // 哲学家回复结束时，保存最后一轮的哲学家回复（不等待用户下一轮回复）
+        try {
+          const currentUserAnswer = textToSend;
+          await philosophyApi.saveConversation({
+            user_id: user?.username || user?.id || 'guest',
+            session_id: sessionId,
+            mode: `philosopher_${philosopherName}`,
+            round: questionCount + 1,
+            judge_question: philosopherTopic || '',
+            user_answer: currentUserAnswer,
+            philosopher_response: philosopherResponses.map((r, i) => `${philosopherName}: ${r}`).join('\n\n')
+          });
+          console.log('哲学家回复结束已保存, round:', questionCount + 1, 'philosopherResponses:', philosopherResponses.length);
+        } catch (e) { console.error('保存哲学家回复失败:', e); }
+      }
       
       setQuestionCount(prev => prev + 1);
       setDialoguePhase('waiting');
