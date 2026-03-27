@@ -337,6 +337,7 @@ const App: React.FC = () => {
   // 处理点击历史记录 - 加载历史对话或报告
   const handleSelectHistory = async (history: any) => {
     console.log('选中历史记录:', history);
+    console.log('sessionId 用于API查询:', history.id, '| sessionId字段:', history.sessionId);
     
     // HistorySidebar 把 session_id 映射到 id
     const sessionId = history.id;
@@ -382,6 +383,7 @@ const App: React.FC = () => {
     if (sessionId) {
       try {
         const res: any = await philosophyApi.getConversations(String(userId), sessionId);
+        console.log('API getConversations 返回:', res, 'sessionId查询:', sessionId, 'userId:', userId);
         if (res.conversations && res.conversations.length > 0) {
           const loadedMessages: Message[] = [];
           
