@@ -71,6 +71,11 @@ export const philosophyApi = {
     return fetchApi<{ conversations: any[] }>(`/conversations${params}`);
   },
   
+  // 用于旧历史记录的 fallback 查询：用 mode + created_after 匹配
+  getConversationsByMode: (userId: string, mode: string, createdAfter: number) => {
+    return fetchApi<{ conversations: any[] }>(`/conversations?user_id=${userId}&mode=${mode}&created_after=${createdAfter}`);
+  },
+  
   // 分析报告
   saveReport: (data: {
     user_id: string;

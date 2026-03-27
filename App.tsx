@@ -382,8 +382,25 @@ const App: React.FC = () => {
     // 没有报告，加载对话内容
     if (sessionId) {
       try {
-        const res: any = await philosophyApi.getConversations(String(userId), sessionId);
+        // 优先用 sessionId 查询
+        let res: any = await philosophyApi.getConversations(String(userId), sessionId);
         console.log('API getConversations 返回:', res, 'sessionId查询:', sessionId, 'userId:', userId);
+        
+        // 如果 sessionId 是 history-xxx 格式（旧本地历史），用 mode + 时间范围匹配
+        if ((!res.conversations || res.conversations.length === 0) && sessionId.startsWith('history-') && history.mode) {
+          console.log('sessionId 无数据(history-格式)，尝试 mode + 时间查询');
+          const histTime = history.timestamp;
+          // 往前推30秒到往后30秒的范围
+          const after = histTime - 30000;
+          const before = histTime + 30000;
+          // 查询该用户在 mode 下、created_at 在 +-30秒范围内的最新对话
+          const searchRes: any = await philosophyApi.getConversationsByMode(String(userId), history.mode, after);
+          if (searchRes.conversations && searchRes.conversations.length > 0) {
+            res = { conversations: searchRes.conversations };
+            console.log('Fallback 匹配到对话:', res.conversations[0].id, 'session_id:', res.conversations[0].session_id);
+          }
+        }
+        
         if (res.conversations && res.conversations.length > 0) {
           const loadedMessages: Message[] = [];
           
