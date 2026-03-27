@@ -71,7 +71,8 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
       let userId = 'guest';
       if (savedUser) {
         try {
-          userId = JSON.parse(savedUser).username || 'guest';
+          const saved = JSON.parse(savedUser);
+          userId = saved.username || saved.id || 'guest';
         } catch (e) {}
       }
       // 如果是游客，检查是否有保存的guestUserId

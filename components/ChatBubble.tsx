@@ -254,7 +254,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
                     <>
                       <div className="text-base leading-relaxed whitespace-pre-wrap text-slate-700 pl-3 font-sans">
                         {shouldUseTypewriter ? (
-                          <TypewriterText text={mainContent} speed={20} onComplete={handleTypingComplete} />
+                          <TypewriterText text={mainContent} speed={80} onComplete={handleTypingComplete} />
                         ) : (
                           renderSimpleText(mainContent)
                         )}
@@ -270,7 +270,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
                 return (
                   <div className="text-base leading-relaxed whitespace-pre-wrap text-slate-700 pl-3 font-sans">
                     {shouldUseTypewriter ? (
-                      <TypewriterText text={rawContent} speed={20} onComplete={handleTypingComplete} />
+                      <TypewriterText text={rawContent} speed={80} onComplete={handleTypingComplete} />
                     ) : (
                       renderSimpleText(rawContent)
                     )}
@@ -296,7 +296,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-4 rounded-2xl shadow-lg">
               <div className="text-base leading-relaxed whitespace-pre-wrap text-white font-sans">
                 {shouldUseTypewriter ? (
-                  <TypewriterText text={rawContent} speed={15} onComplete={handleTypingComplete} />
+                  <TypewriterText text={rawContent} speed={80} onComplete={handleTypingComplete} />
                 ) : (
                   rawContent
                 )}
@@ -320,7 +320,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, language, onTyp
         <div className="bg-white px-5 py-4 rounded-2xl shadow-sm border border-slate-100">
           <div className="text-base leading-relaxed whitespace-pre-wrap text-slate-800">
             {shouldUseTypewriter ? (
-              <TypewriterText text={rawContent} onComplete={handleTypingComplete} />
+              <TypewriterText text={rawContent} speed={80} onComplete={handleTypingComplete} />
             ) : (
               renderSimpleText(rawContent)
             )}

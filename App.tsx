@@ -26,8 +26,8 @@ const DEEP_TARGET = 15;
 
 const i18n = {
   zh: {
-    title: "探索者指南针",
-    subtitle: "从心出发，发现天命",
+    title: "众说",
+    subtitle: "Vino的哲学实验室",
     landingDesc: "这不是一次普通的测试。拉动命运的拉杆，抽取一个当下最需要面对的哲学命题。",
     drawBtn: "抽取命运卡牌",
     drawing: "命运流转中...",
@@ -77,7 +77,7 @@ const i18n = {
     apiKeyPlaceholder: "输入您的 API Key",
     saveBtn: "确认保存",
     customKeyTip: "选择引擎并配置 Key。DeepSeek 提供更犀利的逻辑，Gemini 提供更广博的视野。",
-    loginTitle: "登录探索者",
+    loginTitle: "登录众说",
     loginDesc: "开启您的哲学探索之旅",
     phonePlaceholder: "手机号",
     passwordPlaceholder: "密码",
@@ -103,8 +103,8 @@ const i18n = {
     menu: "菜单"
   },
   en: {
-    title: "Explorer's Compass",
-    subtitle: "Navigate Your Soul",
+    title: "众说",
+    subtitle: "Vino's Philosophy Lab",
     landingDesc: "Not just a test. Pull the lever of fate to draw the philosophical question you most need to face right now.",
     drawBtn: "Draw Fate Card",
     drawing: "Spinning the Wheel of Fate...",
@@ -154,7 +154,7 @@ const i18n = {
     apiKeyPlaceholder: "Enter your API Key",
     saveBtn: "Save Changes",
     customKeyTip: "Select your engine. DeepSeek for logic, Gemini for breadth.",
-    loginTitle: "Login",
+    loginTitle: "Login to 众说",
     loginDesc: "Begin your philosophical odyssey",
     phonePlaceholder: "Phone Number",
     passwordPlaceholder: "Password",
@@ -234,6 +234,7 @@ const App: React.FC = () => {
   const [userTokens, setUserTokens] = useState<number>(100); // 用户先令
   const [showEditProfile, setShowEditProfile] = useState(false); // 修改资料弹窗
   const [showVIP, setShowVIP] = useState(false); // 会员购买弹窗
+  const [showGenComplete, setShowGenComplete] = useState(false); // 生成完成提示
 
   // Two-phase dialogue state
   const [dialoguePhase, setDialoguePhase] = useState<'judge' | 'philosopher' | 'waiting'>('waiting');
@@ -272,8 +273,28 @@ const App: React.FC = () => {
   const t = i18n[lang];
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    // 生成过程中不强制滚动，让用户可以向上查看历史
+    if (scrollRef.current && !isLoading) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   }, [messages, isLoading]);
+
+  // 生成完成时显示提示
+  useEffect(() => {
+    if (!isLoading && showGenComplete) {
+      const timer = setTimeout(() => setShowGenComplete(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, showGenComplete]);
+
+  // 监听 isLoading 从 true 变为 false，显示生成完成提示
+  const prevIsLoadingRef = useRef(false);
+  useEffect(() => {
+    if (prevIsLoadingRef.current && !isLoading) {
+      setShowGenComplete(true);
+    }
+    prevIsLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   const saveSettings = (newSettings: AppSettings) => {
     setSettings(newSettings);
@@ -302,22 +323,51 @@ const App: React.FC = () => {
   const handleSelectHistory = async (history: any) => {
     console.log('选中历史记录:', history);
     
-    // 使用 sessionId 作为会话ID
-    const sessionId = history.sessionId || history.id;
-    // 使用 username 与 history sidebar 保持一致
-    const userId = user?.username || localStorage.getItem('guestUserId') || 'guest';
+    // HistorySidebar 把 session_id 映射到 id
+    const sessionId = history.id;
+    // 用户ID：优先用 username，其次 id，最后 guest
+    const userId = user?.username || user?.id || localStorage.getItem('guestUserId') || 'guest';
     
-    if (history.isComplete && history.result) {
-      // 有完整报告 - 跳转到报告页面
-      setResult(history.result);
-      setMode(history.mode);
-      setState('result');
-    } else if (sessionId && userId) {
-      // 加载对话内容
+    // 设置 sessionId 状态，这样继续对话时能正确保存
+    setSessionId(sessionId);
+    setMode(history.mode);
+    setCurrentHistoryId(sessionId);
+    setShowSidebar(false);
+    
+    // 先检查有没有报告
+    try {
+      const reportsRes: any = await philosophyApi.getReports(String(userId), sessionId);
+      if (reportsRes.reports && reportsRes.reports.length > 0) {
+        const report = reportsRes.reports[0];
+        // 解析后端 snake_case 字段，转换为前端 camelCase 格式
+        const keyInsights = typeof report.key_insights === 'string' ? JSON.parse(report.key_insights) : (report.key_insights || []);
+        const suggestedPaths = typeof report.suggested_paths === 'string' ? JSON.parse(report.suggested_paths) : (report.suggested_paths || []);
+        const rawDimensions = typeof report.dimensions === 'string' ? JSON.parse(report.dimensions) : (report.dimensions || {});
+        // 将 { "理性": 75 } 转换为 [ { label: "理性", value: 75 } ]
+        const dimensions: Dimension[] = Object.entries(rawDimensions).map(([label, value]) => ({ label, value: value as number }));
+        
+        const result: DiscoveryResult = {
+          title: report.title,
+          summary: report.summary,
+          philosophicalTrend: report.philosophical_trend,
+          keyInsights,
+          suggestedPaths,
+          motto: report.motto,
+          dimensions,
+        };
+        setResult(result);
+        setState('result');
+        return;
+      }
+    } catch (e) {
+      console.error('检查报告失败:', e);
+    }
+    
+    // 没有报告，加载对话内容
+    if (sessionId) {
       try {
         const res: any = await philosophyApi.getConversations(String(userId), sessionId);
         if (res.conversations && res.conversations.length > 0) {
-          // 构建消息数组
           const loadedMessages: Message[] = [];
           
           res.conversations.forEach((conv: any) => {
@@ -389,20 +439,12 @@ const App: React.FC = () => {
           
           setMessages(loadedMessages);
         }
-        setMode(history.mode);
-        setState('chatting');
       } catch (error) {
         console.error('加载对话失败:', error);
-        setMode(history.mode);
-        setState('chatting');
       }
-    } else {
-      setMode(history.mode);
-      setState('chatting');
     }
     
-    setCurrentHistoryId(sessionId);
-    setShowSidebar(false);
+    setState('chatting');
   };
 
   // 登录处理
@@ -730,11 +772,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
                 philosopherResponses.push(msg.content);
                 setMessages(prev => [...prev, { ...msg, speaker: philosopherName, id: `phil-${Date.now()}-${i}` }]);
                 
-                setTimeout(() => {
-                  if (scrollRef.current) {
-                    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-                  }
-                }, 100);
+                // 生成过程中不再强制滚动，让用户可以向上查看历史
                 
                 await new Promise(resolve => setTimeout(resolve, 1200));
               }
@@ -746,7 +784,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
           // 保存对话历史到数据库
           try {
             await philosophyApi.saveConversation({
-              user_id: user?.username || 'guest',
+              user_id: user?.username || user?.id || 'guest',
               session_id: sessionId,
               mode: `philosopher_${philosopherName}`,
               round: questionCount + 1,
@@ -839,12 +877,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
               }
               setMessages(prev => [...prev, { ...msg, id: `phil-${Date.now()}-${i}` }]);
               
-              // 滚动到底部
-              setTimeout(() => {
-                if (scrollRef.current) {
-                  scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-                }
-              }, 100);
+              // 生成过程中不再强制滚动，让用户可以向上查看历史
               
               // 每条消息之间延迟
               await new Promise(resolve => setTimeout(resolve, 1200));
@@ -872,7 +905,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
             : '';
           
           await philosophyApi.saveConversation({
-            user_id: user?.username || 'guest',
+            user_id: user?.username || user?.id || 'guest',
             session_id: sessionId,
             mode: mode || '',
             round: questionCount + 1,
@@ -964,7 +997,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
       setResult(res); setState('result');
       
       // 保存到后端历史记录 - 使用已有的sessionId
-      const userId = user?.username || localStorage.getItem('guestUserId') || `guest_${Date.now()}`;
+      const userId = user?.username || user?.id || localStorage.getItem('guestUserId') || `guest_${Date.now()}`;
       // 保存guest用户ID到localStorage
       if (!user?.username && !localStorage.getItem('guestUserId')) {
         localStorage.setItem('guestUserId', userId);
@@ -1183,7 +1216,8 @@ Please refute, question, or deeply inquire about the user's answer based on your
   };
 
   const handleTyping = useCallback(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    // 生成过程中不滚动，让用户可以向上查看历史
+    // 滚动只在非生成状态时由 useEffect 处理
   }, []);
 
   if (state === 'auth') {
@@ -1947,7 +1981,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
               </div>
             </div>
 
-            <div className="pt-10 border-t border-slate-100 text-slate-300 text-[10px] tracking-[0.6em] font-black uppercase">EXPLORER'S COMPASS • AI SOUL NAVIGATOR • {new Date().toLocaleDateString()}</div>
+            <div className="pt-10 border-t border-slate-100 text-slate-300 text-[10px] tracking-[0.6em] font-black uppercase">众说 • VINO'S PHILOSOPHY LAB • {new Date().toLocaleDateString()}</div>
           </div>
         </div>
         <div style={{display:'none'}}><div ref={chatContainerRef} className="bg-white p-24 w-[1000px] flex flex-col gap-10 export-container">
@@ -1993,6 +2027,16 @@ Please refute, question, or deeply inquire about the user's answer based on your
           {renderLoading()}
         </div>
       </main>
+
+      {/* 生成完成提示 */}
+      {showGenComplete && (
+        <div className="fixed bottom-40 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 font-medium">
+            <Sparkles size={18} />
+            <span>{lang === 'zh' ? '内容生成完成' : 'Generation complete'}</span>
+          </div>
+        </div>
+      )}
 
       {/* 底部输入区 */}
       <footer className="p-4 bg-white border-t sticky bottom-0 shadow-lg z-30">
