@@ -2031,9 +2031,9 @@ Please refute, question, or deeply inquire about the user's answer based on your
       {/* 生成完成提示 */}
       {showGenComplete && (
         <div className="fixed bottom-40 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 font-medium">
+          <div className="bg-indigo-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 font-medium">
             <Sparkles size={18} />
-            <span>{lang === 'zh' ? '内容生成完成' : 'Generation complete'}</span>
+            <span>{lang === 'zh' ? '查看新问题' : 'New question ready'}</span>
           </div>
         </div>
       )}
