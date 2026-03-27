@@ -28,6 +28,7 @@ interface ChatSidebarProps {
   onOpenPhilosophers: () => void;
   onReset: () => void;
   onChangeLang: () => void;
+  onSelectHistory?: (history: ChatHistory) => void;
 }
 
 export const ChatSidebar: React.FC<ChatSidebarProps> = ({ 
@@ -44,7 +45,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   onOpenAllModes,
   onOpenPhilosophers,
   onReset,
-  onChangeLang
+  onChangeLang,
+  onSelectHistory
 }) => {
   const isZh = language === 'zh';
   const [history, setHistory] = useState<ChatHistory[]>([]);
@@ -192,6 +194,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     currentHistoryId === h.id ? '' : ''
                   }`}
                   style={{ background: currentHistoryId === h.id ? slotMachineColors.card : 'transparent' }}
+                  onClick={() => onSelectHistory?.(h)}
                 >
                   <div className="flex-1 min-w-0 mr-2">
                     <p className="text-sm truncate" style={{ color: slotMachineColors.text }}>{h.modeLabel}</p>
