@@ -4,6 +4,7 @@ import { X, Sparkles, Settings, ChevronLeft, ChevronRight, Languages, LogOut, Pl
 
 interface ChatHistory {
   id: string;
+  sessionId?: string;
   mode: DiscoveryMode;
   modeLabel: string;
   questionCount: number;

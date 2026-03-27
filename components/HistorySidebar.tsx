@@ -87,6 +87,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
           // 转换后端数据格式为前端格式
           const backendHistory: ChatHistory[] = res.history.map((h: any) => ({
             id: h.session_id || h.sessionId,
+            sessionId: h.session_id || h.sessionId,
             mode: h.mode as DiscoveryMode,
             modeLabel: getModeLabel(h.mode, language),
             questionTitle: h.questionTitle || getModeLabel(h.mode, language),
@@ -294,11 +295,13 @@ export const saveToHistory = (
   questionCount: number,
   lastMessage: string,
   result?: DiscoveryResult,
-  isComplete: boolean = false
+  isComplete: boolean = false,
+  sessionId?: string
 ) => {
   const id = `history-${Date.now()}`;
   const newHistory: ChatHistory = {
     id,
+    sessionId: sessionId || `session-${Date.now()}`,
     mode,
     modeLabel,
     questionTitle,

@@ -340,7 +340,7 @@ const App: React.FC = () => {
     console.log('sessionId 用于API查询:', history.id, '| sessionId字段:', history.sessionId);
     
     // HistorySidebar 把 session_id 映射到 id
-    const sessionId = history.id;
+    const sessionId = history.sessionId || history.id;
     // 用户ID：优先用 username，其次 id，最后 guest
     const userId = user?.username || user?.id || localStorage.getItem('guestUserId') || 'guest';
     
@@ -644,7 +644,7 @@ const App: React.FC = () => {
       // 开始新对话时保存历史记录（移动到获取问题之后）
       const modeLabel = getModeLabel(m);
       const { saveToHistory } = await import('./components/HistorySidebar');
-      const newHistoryId = saveToHistory(m, modeLabel, randomQ.content, 0, '', undefined, false);
+      const newHistoryId = saveToHistory(m, modeLabel, randomQ.content, 0, '', undefined, false, sessionId);
       console.log('新对话已保存到历史记录:', newHistoryId);
       // 刷新历史记录
       setHistoryRefreshKey(prev => prev + 1);
@@ -1074,7 +1074,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
       const lastMessage = messages[messages.length - 1]?.content?.slice(0, 50) || '';
       // 从 startContentRef 提取实际问题标题
       const questionTitle = startContentRef.current?.split('|')[0]?.replace('START:', '') || modeLabel;
-      saveToHistory(mode, modeLabel, questionTitle, messages.filter(m => m.role === 'user').length, lastMessage, res, true);
+      saveToHistory(mode, modeLabel, questionTitle, messages.filter(m => m.role === 'user').length, lastMessage, res, true, currentSessionId || sessionId);
       
     } catch (e: any) { 
       console.error(e);
