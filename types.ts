@@ -21,6 +21,7 @@ export interface Message {
   content: string;
   timestamp: number;
   suggestions?: string[];
+  isHistorical?: boolean; // 标记从历史记录加载的消息，跳过打字机效果
 }
 
 export interface QuestionPoolItem {

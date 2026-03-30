@@ -1,21 +1,6 @@
 // API 客户端 - 用于调用后端服务
-const API_BASE_URL = 'https://vinolab.tech/api';
-
-async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`API Error: ${response.status}`);
-  }
-
-  return response.json();
-}
+// ⚠️ 不再硬编码 API 地址，统一从 config/api.ts 读取
+import { API_BASE, fetchApi } from '../config/api';
 
 // 账号认证模块
 export const authApi = {
@@ -51,6 +36,10 @@ export const philosophyApi = {
       method: 'POST',
       body: JSON.stringify({ userId, tokens, action })
     }),
+  
+  // 获取用户 tokens 余额
+  getUserTokens: (userId: string) =>
+    fetchApi<{ tokens: number }>(`/philosophy/user/${userId}`),
   
   // 对话历史详细记录
   saveConversation: (data: {

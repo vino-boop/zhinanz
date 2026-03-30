@@ -11,6 +11,7 @@ import { ChatSidebar } from './components/ChatSidebar';
 import { PhilosophersLibrary } from './components/PhilosophersLibrary';
 import { PhilosopherTopicSelect } from './components/PhilosopherTopicSelect';
 import { INITIAL_QUESTION_POOL, initializeQuestionPool } from './constants/questions';
+import { fetchApiKeyFromBackend } from './config/api';
 import { 
   Compass, Send, RefreshCw, Sparkles, ArrowRight, Quote, Languages, Scale, 
   ScrollText, FileImage, Layers, Zap, Dna, Target, Timer, Infinity as InfinityIcon, AlertCircle, Settings, X, Key,
@@ -23,6 +24,12 @@ declare const html2canvas: any;
 
 const QUICK_TARGET = 8;
 const DEEP_TARGET = 15;
+
+// 辅助函数：从后端获取默认 API Key
+async function getDefaultApiKey(): Promise<string> {
+  const backendKey = await fetchApiKeyFromBackend('哲思');
+  return backendKey?.apiKey || '';
+}
 
 const i18n = {
   zh: {
@@ -216,6 +223,9 @@ const App: React.FC = () => {
   const [intensity, setIntensity] = useState<DiscoveryIntensity>('QUICK');
   const [lang, setLang] = useState<Language>('zh');
   const [messages, setMessages] = useState<Message[]>([]);
+  const messagesRef = useRef<Message[]>([]); // 保持与 messages 同步，供 handleSend 读取最新值
+  // 同步 messagesRef
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -255,9 +265,6 @@ const App: React.FC = () => {
   const [dialoguePhase, setDialoguePhase] = useState<'judge' | 'philosopher' | 'waiting'>('waiting');
   const [lastJudgeContent, setLastJudgeContent] = useState<string>('');
   
-  // 硬编码的 API Key（从数据库读取）
-  const PHILOSOPHY_API_KEY = 'sk-b9e79da674114733be8df0d48a2095a2';
-  
   const [settings, setSettings] = useState<AppSettings>(() => {
     // 先检查 localStorage
     const saved = localStorage.getItem('explorer_compass_settings');
@@ -267,10 +274,8 @@ const App: React.FC = () => {
         return parsed;
       }
     }
-    // 如果没有，使用默认 API Key
-    const defaultSettings = { provider: 'deepseek', apiKey: PHILOSOPHY_API_KEY };
-    localStorage.setItem('explorer_compass_settings', JSON.stringify(defaultSettings));
-    return defaultSettings;
+    // 默认设置（API Key 由用户配置或从后端获取，不硬编码）
+    return { provider: 'deepseek', apiKey: '' };
   });
 
   // 登录表单状态
@@ -294,10 +299,27 @@ const App: React.FC = () => {
     }
   }, [messages, isLoading]);
 
+  // 滚动到底部时隐藏"查看新问题"提示
+  useEffect(() => {
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return;
+    
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollEl;
+      // 当滚动到底部（或差100px内），隐藏提示
+      if (scrollHeight - scrollTop - clientHeight < 100) {
+        setShowGenComplete(false);
+      }
+    };
+    
+    scrollEl.addEventListener('scroll', handleScroll, { passive: true });
+    return () => scrollEl.removeEventListener('scroll', handleScroll);
+  }, []);
+
   // 生成完成时显示提示
   useEffect(() => {
     if (!isLoading && showGenComplete) {
-      const timer = setTimeout(() => setShowGenComplete(false), 3000);
+      const timer = setTimeout(() => setShowGenComplete(false), 5000);
       return () => clearTimeout(timer);
     }
   }, [isLoading, showGenComplete]);
@@ -426,7 +448,8 @@ const App: React.FC = () => {
                       role: 'assistant',
                       speaker: undefined,
                       content: conv.judge_question,
-                      timestamp: ex.timestamp || Date.now()
+                      timestamp: ex.timestamp || Date.now(),
+                      isHistorical: true
                     });
                   }
                   // AI 法官问题 → role: assistant, speaker: Judge
@@ -436,7 +459,8 @@ const App: React.FC = () => {
                       role: 'assistant',
                       speaker: 'Judge',
                       content: ex.judge_question,
-                      timestamp: ex.timestamp || Date.now()
+                      timestamp: ex.timestamp || Date.now(),
+                      isHistorical: true
                     });
                   }
                   // 用户回答 → role: user
@@ -445,20 +469,29 @@ const App: React.FC = () => {
                       id: `${conv.id}-a-${idx}`,
                       role: 'user',
                       content: ex.user_answer,
-                      timestamp: Date.now()
+                      timestamp: Date.now(),
+                      isHistorical: true
                     });
                   }
-                  // 哲学家回复 → 从 "哲学家名字: 回复内容" 格式中解析，每条独立显示
+                  // 哲学家回复 → 按分隔符分割，每位哲学家的回复独立显示
                   if (ex.philosopher_response) {
-                    const colonIdx = ex.philosopher_response.indexOf(': ');
-                    const speaker = colonIdx > 0 ? ex.philosopher_response.substring(0, colonIdx) : 'Philosopher';
-                    const content = colonIdx > 0 ? ex.philosopher_response.substring(colonIdx + 2) : ex.philosopher_response;
-                    loadedMessages.push({
-                      id: `${conv.id}-p-${idx}`,
-                      role: 'assistant',
-                      speaker,
-                      content,
-                      timestamp: Date.now()
+                    // 先按 "---" 分割不同哲学家的回复块
+                    const blocks = ex.philosopher_response.split('\n\n---\n\n');
+                    blocks.forEach((block: string, blockIdx: number) => {
+                      // 每个块内按 "名字:\n内容" 解析（可能有多段）
+                      const colonIdx = block.indexOf(': ');
+                      const speaker = colonIdx > 0 ? block.substring(0, colonIdx) : 'Philosopher';
+                      const content = colonIdx > 0 ? block.substring(colonIdx + 2) : block;
+                      if (content.trim()) {
+                        loadedMessages.push({
+                          id: `${conv.id}-p-${idx}-${blockIdx}`,
+                          role: 'assistant',
+                          speaker,
+                          content: content.trim(),
+                          timestamp: Date.now(),
+                          isHistorical: true
+                        });
+                      }
                     });
                   }
                 });
@@ -473,7 +506,8 @@ const App: React.FC = () => {
                   role: 'assistant',
                   speaker: conv.round === 1 ? undefined : 'Judge',
                   content: conv.judge_question,
-                  timestamp: new Date(conv.created_at).getTime()
+                  timestamp: new Date(conv.created_at).getTime(),
+                  isHistorical: true
                 });
               }
               if (conv.user_answer) {
@@ -481,19 +515,27 @@ const App: React.FC = () => {
                   id: `${conv.id}-a`,
                   role: 'user',
                   content: conv.user_answer,
-                  timestamp: new Date(conv.created_at).getTime() + 1
+                  timestamp: new Date(conv.created_at).getTime() + 1,
+                  isHistorical: true
                 });
               }
               if (conv.philosopher_response) {
-                const colonIdx = conv.philosopher_response.indexOf(': ');
-                const speaker = colonIdx > 0 ? conv.philosopher_response.substring(0, colonIdx) : 'Philosopher';
-                const content = colonIdx > 0 ? conv.philosopher_response.substring(colonIdx + 2) : conv.philosopher_response;
-                loadedMessages.push({
-                  id: `${conv.id}-p`,
-                  role: 'assistant',
-                  speaker,
-                  content,
-                  timestamp: new Date(conv.created_at).getTime() + 2
+                // 兼容旧格式：先按 "---" 分割
+                const blocks = conv.philosopher_response.split('\n\n---\n\n');
+                blocks.forEach((block: string, blockIdx: number) => {
+                  const colonIdx = block.indexOf(': ');
+                  const speaker = colonIdx > 0 ? block.substring(0, colonIdx) : 'Philosopher';
+                  const content = colonIdx > 0 ? block.substring(colonIdx + 2) : block;
+                  if (content.trim()) {
+                    loadedMessages.push({
+                      id: `${conv.id}-p-${blockIdx}`,
+                      role: 'assistant',
+                      speaker,
+                      content: content.trim(),
+                      timestamp: new Date(conv.created_at).getTime() + 2 + blockIdx,
+                      isHistorical: true
+                    });
+                  }
                 });
               }
             }
@@ -511,6 +553,15 @@ const App: React.FC = () => {
     }
     
     setState('chatting');
+    
+    // 自动触发审判机继续追问（模拟用户发送继续信号）
+    // 注意：使用延迟确保 messagesRef 已更新
+    setTimeout(() => {
+      // 确保消息已加载后再触发
+      if (messagesRef.current.length > 0) {
+        handleSend('请基于以上对话脉络，继续追问下一个问题。');
+      }
+    }, 800);
   };
 
   // 登录处理
@@ -578,6 +629,26 @@ const App: React.FC = () => {
       setState('landing');
     }
   };
+
+  // 从数据库刷新用户先令余额
+  const refreshUserTokens = async () => {
+    if (!user?.id) return;
+    try {
+      const res: any = await philosophyApi.getUserTokens(String(user.id));
+      if (res?.tokens !== undefined) {
+        setUserTokens(res.tokens);
+      }
+    } catch (e) {
+      console.warn('刷新先令失败:', e);
+    }
+  };
+
+  // 页面加载时自动刷新 token
+  useEffect(() => {
+    if (user?.id) {
+      refreshUserTokens();
+    }
+  }, [user?.id]);
 
   // 发送验证码
   const handleSendCode = () => {
@@ -829,7 +900,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
             }
           );
 
-          // 逐个显示哲学家消息，每条消息作为独立轮次保存
+          // 逐个显示哲学家消息，收集所有回复后一起保存
           let philosopherResponses: string[] = [];
           let philosopherRound = 0; // 追踪哲学家消息的轮次编号
           for await (const { messages: newPhilosopherMessages } of philosopherStream) {
@@ -838,49 +909,32 @@ Please refute, question, or deeply inquire about the user's answer based on your
               for (let i = 0; i < newPhilosopherMessages.length; i++) {
                 const msg = newPhilosopherMessages[i];
                 philosopherResponses.push(msg.content);
-                philosopherRound = philosopherResponses.length; // 每条消息对应独立的 round
+                philosopherRound = questionCount + 1; // 用用户题号，不是哲学家的
                 setMessages(prev => [...prev, { ...msg, speaker: philosopherName, id: `phil-${Date.now()}-${i}` }]);
-                
-                // 生成过程中不再强制滚动，让用户可以向上查看历史
-                
                 await new Promise(resolve => setTimeout(resolve, 1200));
-                
-                // 每收到一条哲学家消息，立即保存前一条到数据库（逐条保存，不遗漏）
-                if (prevPhilosopherContentRef.current !== null) {
-                  try {
-                    // philosopherResponses.length 是当前已有的条数（保存前一条的 round）
-                    await philosophyApi.saveConversation({
-                      user_id: user?.username || user?.id || 'guest',
-                      session_id: sessionId,
-                      mode: `philosopher_${philosopherName}`,
-                      round: philosopherResponses.length, // 前一条的 round = 已有条数
-                      judge_question: philosopherTopic || '',
-                      user_answer: textToSend,
-                      philosopher_response: `${philosopherName}: ${prevPhilosopherContentRef.current}`
-                    });
-                  } catch (e) { console.error('保存哲学家回复失败:', e); }
-                }
-                // 更新追踪 ref
-                prevPhilosopherContentRef.current = msg.content;
               }
             }
           }
           
           console.log('哲学家回复完成');
           
-          // 保存最后一条哲学家回复到数据库
-          if (prevPhilosopherContentRef.current !== null) {
+          // 所有哲学家回复收集完毕后，一起保存（按哲学家分段）
+          if (philosopherResponses.length > 0) {
             try {
+              const allPhilosopherContent = philosopherResponses
+                .map((content, idx) => `${philosopherName}: ${content}`)
+                .join('\n\n---\n\n');
               await philosophyApi.saveConversation({
                 user_id: user?.username || user?.id || 'guest',
                 session_id: sessionId,
-                mode: `philosopher_${philosopherName}`,
-                round: philosopherRound,
+                mode: mode || `philosopher_${philosopherName}`,
+                round: questionCount + 1,
                 judge_question: philosopherTopic || '',
                 user_answer: textToSend,
-                philosopher_response: `${philosopherName}: ${prevPhilosopherContentRef.current}`
+                philosopher_response: allPhilosopherContent
               });
-            } catch (e) { console.error('保存最后哲学家回复失败:', e); }
+              console.log('哲学家回复已保存, round:', questionCount + 1);
+            } catch (e) { console.error('保存哲学家回复失败:', e); }
           }
           // 重置追踪 ref
           prevPhilosopherContentRef.current = null;
@@ -888,6 +942,15 @@ Please refute, question, or deeply inquire about the user's answer based on your
           setQuestionCount(prev => prev + 1);
           setDialoguePhase('waiting');
           setIsLoading(false);
+          
+          // 保存哲学家对话到本地历史
+          try {
+            const { saveToHistory } = await import('./components/HistorySidebar');
+            const modeLabel = getModeLabel(mode);
+            const questionTitle = philosopherTopic || modeLabel;
+            const userAnswerCount = messages.filter(m => m.role === 'user').length;
+            saveToHistory(mode, modeLabel, questionTitle, userAnswerCount, textToSend, undefined, false, sessionId);
+          } catch (e) { console.error('保存哲学家对话历史失败:', e); }
           
           // 哲学家一对一模式直接返回
           console.log('哲学家对话完成，准备返回');
@@ -924,7 +987,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
       setDialoguePhase('judge');
       
       // 只提取用户和审判机的消息，忽略哲学家回复（减少上下文）
-      const relevantMessages = messages.filter(m => 
+      const relevantMessages = messagesRef.current.filter(m => 
         m.role === 'user' || m.speaker === 'Judge'
       );
       const historyWithSignal = [{ id: 's', role: 'user', content: startContentRef.current, timestamp: 0 }, ...relevantMessages, userMsg];
@@ -955,7 +1018,8 @@ Please refute, question, or deeply inquire about the user's answer based on your
           lang
         );
 
-        // 逐个显示哲学家消息
+        // 逐个显示哲学家消息，同时收集回复
+        const philosopherMsgsThisRound: Message[] = [];
         for await (const { messages: newPhilosopherMessages } of philosopherStream) {
           console.log('收到哲学家消息:', newPhilosopherMessages);
           if (newPhilosopherMessages.length > 0) {
@@ -966,6 +1030,8 @@ Please refute, question, or deeply inquire about the user's answer based on your
               if (msg.speaker && !philosopherNamesThisRound.includes(msg.speaker)) {
                 philosopherNamesThisRound.push(msg.speaker);
               }
+              // 收集哲学家消息
+              philosopherMsgsThisRound.push({ ...msg, id: `phil-${Date.now()}-${i}` });
               setMessages(prev => [...prev, { ...msg, id: `phil-${Date.now()}-${i}` }]);
               
               // 生成过程中不再强制滚动，让用户可以向上查看历史
@@ -980,20 +1046,22 @@ Please refute, question, or deeply inquire about the user's answer based on your
         
         // 保存对话历史到数据库
         try {
-          // 获取本轮对话的相关消息
-          const judgeMsgs = messages.filter(m => m.speaker === 'Judge' || m.speaker === '审判机');
-          const userMsgs = messages.filter(m => m.role === 'user');
-          // 使用本轮实际出现的哲学家名字过滤，而不是selectedPhilosopher
-          const philosopherMsgs = messages.filter(m => 
-            philosopherNamesThisRound.includes(m.speaker)
-          );
-          
+          // 从 messagesRef 中获取审判机和用户消息（避免 setMessages 异步延迟）
+          const judgeMsgs = messagesRef.current.filter(m => m.speaker === 'Judge' || m.speaker === '审判机');
+          const userMsgs = messagesRef.current.filter(m => m.role === 'user');
+          // 本轮哲学家回复直接用收集到的
           const lastJudgeQuestion = judgeMsgs.length > 0 ? judgeMsgs[judgeMsgs.length - 1].content : '';
           const lastUserAnswer = userMsgs.length > 0 ? userMsgs[userMsgs.length - 1].content : textToSend;
-          const lastJudgeResponse = ''; // 审判机的回应
-          const lastPhilosopherResponse = philosopherMsgs.length > 0 
-            ? philosopherMsgs.map(m => m.content).join('\n\n') 
-            : '';
+          // 格式化哲学家回复：按哲学家名字分段
+          const philosopherByName: Record<string, string[]> = {};
+          philosopherMsgsThisRound.forEach(m => {
+            const name = m.speaker || 'Philosopher';
+            if (!philosopherByName[name]) philosopherByName[name] = [];
+            philosopherByName[name].push(m.content);
+          });
+          const lastPhilosopherResponse = Object.entries(philosopherByName)
+            .map(([name, contents]) => `${name}:\n${contents.join('\n')}`)
+            .join('\n\n---\n\n');
           
           await philosophyApi.saveConversation({
             user_id: user?.username || user?.id || 'guest',
@@ -1004,7 +1072,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
             user_answer: lastUserAnswer,
             philosopher_response: lastPhilosopherResponse
           });
-          console.log('对话历史已保存到数据库');
+          console.log('对话历史已保存到数据库, philosopher_response长度:', lastPhilosopherResponse.length);
         } catch (saveErr) {
           console.error('保存对话历史失败:', saveErr);
         }
@@ -1019,8 +1087,9 @@ Please refute, question, or deeply inquire about the user's answer based on your
       setDialoguePhase('judge');
       
       // 更新历史，包含用户回答和哲学家回复（不包括审判机的上一个问题）
+      // 修复：当 philosopherName 为空时（从历史记录加载时），包含所有非审判机的消息
       const fullHistory = messages.filter(m => 
-        m.role === 'user' || m.speaker === philosopherName
+        m.role === 'user' || m.speaker === philosopherName || (philosopherName === '' && m.speaker && m.speaker !== 'Judge')
       );
       fullHistory.push(userMsg);
       
@@ -1485,7 +1554,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
 
   if (state === 'landing') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
+      <div className={`min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden transition-all duration-300 ${showSidebar ? 'ml-72' : 'ml-16'}`}>
         {/* 统一侧边栏 */}
         <ChatSidebar 
           language={lang}
@@ -1569,11 +1638,16 @@ Please refute, question, or deeply inquire about the user's answer based on your
               
               try {
                 // 调用 AI 生成首个问题
+                // API Key 从 settings 或后端获取，不硬编码
+                const apiKey = settings.apiKey || await getDefaultApiKey();
+                if (!apiKey) {
+                  throw new Error('请先在设置中配置 API Key');
+                }
                 const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${settings.apiKey || 'sk-b9e79da674114733be8df0d48a2095a2'}`
+                    'Authorization': `Bearer ${apiKey}`
                   },
                   body: JSON.stringify({
                     model: 'deepseek-chat',
@@ -1877,7 +1951,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
 
   if (state === 'intensity_select') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50">
+      <div className={`min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 transition-all duration-300 ${showSidebar ? 'ml-72' : 'ml-16'}`}>
         <div className="max-w-2xl text-center space-y-12">
           <button onClick={() => setState('landing')} className="text-slate-400 font-bold flex items-center gap-2 mx-auto hover:text-indigo-600 transition-colors"><ArrowRight className="rotate-180" size={16}/>{t.backBtn}</button>
           <h1 className="text-5xl font-serif font-bold text-slate-900">{t.intensityTitle}</h1>
@@ -1901,7 +1975,7 @@ Please refute, question, or deeply inquire about the user's answer based on your
 
   if (state === 'analyzing') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-10">
+      <div className={`min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-10 transition-all duration-300 ${showSidebar ? 'ml-72' : 'ml-16'}`}>
         <Dna size={80} className="text-indigo-400 animate-pulse mb-8" />
         <h2 className="text-4xl font-serif mb-4 text-center">{t.analyzingTitle}</h2>
         <p className="text-slate-400 italic text-center max-w-md">{t.analyzingDesc}</p>
@@ -2129,28 +2203,41 @@ Please refute, question, or deeply inquire about the user's answer based on your
       />
 
       {/* 聊天内容区 */}
-      <main ref={scrollRef} className="flex-1 overflow-y-auto pt-4 pb-48">
-        <div className="max-w-3xl mx-auto px-4">
-          {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} onTyping={handleTyping} />)}
-          {error && <div className="p-8 bg-red-50 rounded-2xl text-center space-y-4 max-w-md mx-auto border border-red-100">
-            <div className="flex items-center justify-center gap-2 text-red-500 font-medium"><AlertCircle size={20}/>{error}</div>
-            <button onClick={() => handleSend()} className="px-8 py-3 bg-red-500 text-white rounded-xl font-medium flex items-center gap-2 mx-auto"><RefreshCw size={16}/>{t.retryBtn}</button>
-          </div>}
-          {renderLoading()}
-        </div>
-      </main>
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${showSidebar ? 'ml-72' : 'ml-16'}`}>
+        <main ref={scrollRef} className="flex-1 overflow-y-auto pt-4 pb-48">
+          <div className="max-w-3xl mx-auto px-4">
+            {messages.map(m => <ChatBubble key={m.id} message={m} language={lang} skipTyping={m.isHistorical || false} onTyping={handleTyping} />)}
+            {error && <div className="p-8 bg-red-50 rounded-2xl text-center space-y-4 max-w-md mx-auto border border-red-100">
+              <div className="flex items-center justify-center gap-2 text-red-500 font-medium"><AlertCircle size={20}/>{error}</div>
+              <button onClick={() => handleSend()} className="px-8 py-3 bg-red-500 text-white rounded-xl font-medium flex items-center gap-2 mx-auto"><RefreshCw size={16}/>{t.retryBtn}</button>
+            </div>}
+            {renderLoading()}
+          </div>
+        </main>
 
-      {/* 生成完成提示 */}
+      {/* 生成完成提示 - 滚动到底部自动隐藏 */}
       {showGenComplete && (
-        <div className="fixed bottom-40 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <div className="bg-indigo-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 font-medium">
+        <div 
+          className="fixed bottom-40 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-300 cursor-pointer hover:scale-105 active:scale-95 transition-all"
+          onClick={() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); setShowGenComplete(false); }}
+        >
+          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 font-medium">
             <Sparkles size={18} />
-            <span>{lang === 'zh' ? '查看新问题' : 'New question ready'}</span>
+            <span>{lang === 'zh' ? '查看新问题 ↓' : 'New question ready ↓'}</span>
           </div>
         </div>
       )}
 
       {/* 底部输入区 */}
+      {/* 生成报告悬浮按钮 */}
+      {(canFinishEarly || (intensity === 'DEEP' && questionCount >= 10)) && !error && (
+        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-40">
+          <button onClick={analyze} className="px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full font-bold flex items-center gap-3 shadow-2xl hover:shadow-3xl hover:scale-105 active:scale-95 transition-all duration-200">
+            <Sparkles size={20}/>
+            {t.finishBtn}
+          </button>
+        </div>
+      )}
       <footer className="p-4 bg-white border-t sticky bottom-0 shadow-lg z-30">
         <div className="max-w-3xl mx-auto space-y-3">
           {renderSuggestions()}
@@ -2164,16 +2251,11 @@ Please refute, question, or deeply inquire about the user's answer based on your
               <Send size={20}/>
             </button>
           </div>
-          {/* 生成报告按钮 - 用户回答后 或 无上限模式10题后随时出现 */}
-          {(canFinishEarly || (intensity === 'DEEP' && questionCount >= 10)) && !error && (
-            <button onClick={analyze} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
-              <Sparkles size={20}/>{t.finishBtn}
-            </button>
-          )}
           {/* AI 免责声明 */}
           <p className="text-xs text-center text-slate-400">{t.disclaimer}</p>
         </div>
       </footer>
+      </div>
 
       {/* 哲学家介绍弹窗 */}
       {showPhilosopherIntro && (

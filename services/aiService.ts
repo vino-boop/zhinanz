@@ -1,16 +1,14 @@
-import { Message, DiscoveryResult, DiscoveryMode, DiscoveryIntensity, AppSettings } from "../types";
+// AI 服务 - 调用 DeepSeek/Gemini API
+// ⚠️ API Key 不再硬编码，统一从后端或用户设置获取
+import { DEEPSEEK_API_URL, GEMINI_API_URL, fetchApiKeyFromBackend } from '../config/api';
+import { Message, DiscoveryResult, DiscoveryMode, DiscoveryIntensity, AppSettings } from '../types';
 import { getJudgeInstruction, getPhilosopherInstruction } from "../personas";
 import { matchPersonas } from "../personaKeywords";
 
-// 直接调用 DeepSeek API（前端版本，使用用户设置的 API Key）
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-
-// 从 localStorage 获取 API Key
+// 从 localStorage 获取 API Key（用户自定义）
 function getApiKeyFromStorage(): { apiKey: string; provider: string } {
   try {
     const saved = localStorage.getItem('explorer_compass_settings');
-    console.log('读取 localStorage:', saved);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed.apiKey) {
@@ -23,21 +21,21 @@ function getApiKeyFromStorage(): { apiKey: string; provider: string } {
   return { apiKey: '', provider: 'deepseek' };
 }
 
-// 从后端 API 获取 API Key
-async function getApiKeyFromBackend(): Promise<{ apiKey: string; provider: string }> {
-  try {
-    const response = await fetch('https://vinolab.tech/api/overview/apikey/哲思');
-    if (response.ok) {
-      const data = await response.json();
-      if (data.api_key) {
-        console.log('从后端获取 API Key 成功');
-        return { apiKey: data.api_key, provider: 'deepseek' };
-      }
-    }
-  } catch (e) {
-    console.warn('从后端获取 API Key 失败:', e);
+// 获取 API Key 的优先级：用户设置 > 后端获取 > localStorage
+async function getApiKey(settings: AppSettings): Promise<{ apiKey: string; provider: string }> {
+  // 1. 优先使用用户传入的 settings
+  if (settings.apiKey) {
+    return { apiKey: settings.apiKey, provider: settings.provider || 'deepseek' };
   }
-  return { apiKey: '', provider: 'deepseek' };
+  
+  // 2. 尝试从后端获取
+  const backendKey = await fetchApiKeyFromBackend('哲思');
+  if (backendKey) {
+    return backendKey;
+  }
+  
+  // 3. 最后从 localStorage 读取
+  return getApiKeyFromStorage();
 }
 
 // 保存 sessionId (为了兼容现有接口，虽然直连不需要)
@@ -108,7 +106,10 @@ ${judgeInstruction}
 2. 问题要具体、有场景、有冲击力
 3. 绝对不要问抽象的理论问题
 4. 在回复最后添加 [Suggestions] 标签
-5. 如果用户回答得足够深入，添加 [DONE] 标记表示结束`
+5. 当你觉得对话已经足够深入，可以结束时：请用一句诗意的语言总结这场对话的灵魂，然后写出两句话回顾用户的核心观点与回答脉络，最后添加 [DONE] 标记表示结束。格式如：
+   "在这场关于[主题]的追问中，你如同一道穿透迷雾的光..."
+   回顾：用户的回答揭示了[第一核心观点]...同时也展现出[第二特点]...
+   [DONE]`
     : `You are a philosophical exploration assistant, hosting a "Multi-Party Trial" discussion.
 Current Mode: ${mode}
 Current Intensity: ${intensity === 'QUICK' ? 'Quick (~8 rounds)' : 'Deep (unlimited)'}
@@ -122,7 +123,10 @@ Requirements:
 2. Questions should be concrete, scenario-based, impactful
 3. NEVER ask abstract theoretical questions
 4. Add [Suggestions] tag at the end
-5. Add [DONE] if the user has answered deeply enough`;
+5. When you feel the conversation is deep enough to conclude: Write one poetic sentence summarizing the soul of this dialogue, then write two sentences reviewing the user's core viewpoints and answer patterns. Finally add [DONE] tag. Format example:
+   "In this journey of exploring [topic], you appear as a light piercing through the mist..."
+   Review: Your answers reveal [first key insight]... while also showing [second characteristic]...
+   [DONE]`;
 
   const messages: any[] = [
     { role: 'system', content: systemPrompt }
@@ -177,21 +181,8 @@ Requirements:
     sessionId = Date.now().toString();
   }
 
-  // 获取 API Key：优先从后端获取，否则用 settings，否则从 localStorage 读取
-  let apiKey = settings.apiKey;
-  let provider = settings.provider || 'deepseek';
-  if (!apiKey) {
-    const backendKey = await getApiKeyFromBackend();
-    if (backendKey.apiKey) {
-      apiKey = backendKey.apiKey;
-      provider = backendKey.provider;
-    }
-  }
-  if (!apiKey) {
-    const stored = getApiKeyFromStorage();
-    apiKey = stored.apiKey;
-    provider = stored.provider;
-  }
+  // 获取 API Key（不再硬编码）
+  const { apiKey, provider } = await getApiKey(settings);
   if (!apiKey) {
     throw new Error('请先在设置中配置 API Key');
   }
@@ -315,7 +306,7 @@ export const streamPhilosopherResponse = async function* (
   mode: DiscoveryMode,
   settings: AppSettings,
   lang: string = 'zh',
-  specificPhilosopher?: { name: string; prompt: string; keywords?: string } // 指定哲学家（一对一模式）
+  specificPhilosopher?: { name: string; prompt: string; keywords?: string }
 ): AsyncGenerator<{ messages: Message[], isDone: boolean }> {
   const isZh = lang === 'zh';
   
@@ -378,21 +369,8 @@ Requirements:
     sessionId = Date.now().toString();
   }
 
-  // 获取 API Key：优先从后端获取，否则用 settings，否则从 localStorage 读取
-  let apiKey = settings.apiKey;
-  let provider = settings.provider || 'deepseek';
-  if (!apiKey) {
-    const backendKey = await getApiKeyFromBackend();
-    if (backendKey.apiKey) {
-      apiKey = backendKey.apiKey;
-      provider = backendKey.provider;
-    }
-  }
-  if (!apiKey) {
-    const stored = getApiKeyFromStorage();
-    apiKey = stored.apiKey;
-    provider = stored.provider;
-  }
+  // 获取 API Key（不再硬编码）
+  const { apiKey, provider } = await getApiKey(settings);
   if (!apiKey) {
     throw new Error('请先在设置中配置 API Key');
   }
@@ -491,11 +469,9 @@ Requirements:
   // 如果指定了特定哲学家，只保留该哲学家的回复
   if (specificPhilosopher && philosophers.length > 0) {
     const targetName = specificPhilosopher.name;
-    // 尝试匹配哲学家名字（可能包含变体）
     philosophers = philosophers.filter(p => 
       p.name.includes(targetName) || targetName.includes(p.name)
     );
-    // 如果过滤后没有结果，使用整个回复作为该哲学家的回复
     if (philosophers.length === 0) {
       philosophers = [{
         name: targetName,
@@ -570,8 +546,6 @@ export const streamNextQuestion = async function* (
   settings: AppSettings,
   lang: string = 'zh'
 ): AsyncGenerator<{ messages: Message[], isDone: boolean }> {
-  // 直接调用审判机回复（两阶段模式的第一阶段）
-  // 第二阶段在 App.tsx 中处理
   yield* streamJudgeResponse(history, mode, intensity, settings, lang);
 };
 
@@ -615,21 +589,8 @@ Your response MUST be in JSON format, containing:
   }
 
   return callWithRetry(async () => {
-    // 获取 API Key：优先从后端获取，否则用 settings，否则从 localStorage 读取
-    let apiKey = settings.apiKey;
-    let provider = settings.provider || 'deepseek';
-    if (!apiKey) {
-      const backendKey = await getApiKeyFromBackend();
-      if (backendKey.apiKey) {
-        apiKey = backendKey.apiKey;
-        provider = backendKey.provider;
-      }
-    }
-    if (!apiKey) {
-      const stored = getApiKeyFromStorage();
-      apiKey = stored.apiKey;
-      provider = stored.provider;
-    }
+    // 获取 API Key（不再硬编码）
+    const { apiKey, provider } = await getApiKey(settings);
     if (!apiKey) {
       throw new Error('请先在设置中配置 API Key');
     }
@@ -650,8 +611,8 @@ Your response MUST be in JSON format, containing:
         })
       });
     } else {
-      // Gemini 不支持 stream，用于最终分析
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+      // Gemini 用于最终分析
+      const geminiUrl = `${GEMINI_API_URL}?key=${apiKey}`;
       const geminiMessages = messages.map(m => ({
         role: m.role === 'system' ? 'model' : 'user',
         parts: [{ text: m.content }]
@@ -688,7 +649,6 @@ Your response MUST be in JSON format, containing:
     try {
       const parsed = JSON.parse(contentStr);
       
-      // 兼容 DiscoveryResult 格式
       return {
         title: parsed.title || '',
         summary: parsed.summary || '',

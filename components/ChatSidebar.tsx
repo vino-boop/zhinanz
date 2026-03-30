@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Language, DiscoveryMode, DiscoveryResult } from '../types';
-import { X, Sparkles, Settings, ChevronLeft, ChevronRight, Languages, LogOut, Plus, MessageCircle, LayoutGrid } from 'lucide-react';
+import { X, Sparkles, Settings, ChevronLeft, ChevronRight, Languages, LogOut, Plus, MessageCircle, LayoutGrid, Coins, RefreshCw } from 'lucide-react';
 
 interface ChatHistory {
   id: string;
@@ -23,13 +23,17 @@ interface ChatSidebarProps {
   intensity: string;
   questionCount: number;
   currentHistoryId?: string;
+  user?: { id: number; username: string; phone?: string; tokens?: number; role: string } | null;
+  userTokens: number;
+  onOpenVIP?: () => void;
+  historyRefreshKey?: number;
+  onSelectHistory?: (history: ChatHistory) => void;
   onStartNew: () => void;
   onOpenSettings: () => void;
   onOpenAllModes: () => void;
   onOpenPhilosophers: () => void;
   onReset: () => void;
   onChangeLang: () => void;
-  onSelectHistory?: (history: ChatHistory) => void;
 }
 
 export const ChatSidebar: React.FC<ChatSidebarProps> = ({ 
@@ -41,13 +45,17 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   intensity,
   questionCount,
   currentHistoryId,
+  user,
+  userTokens,
+  onOpenVIP,
+  historyRefreshKey,
+  onSelectHistory,
   onStartNew,
   onOpenSettings,
   onOpenAllModes,
   onOpenPhilosophers,
   onReset,
-  onChangeLang,
-  onSelectHistory
+  onChangeLang
 }) => {
   const isZh = language === 'zh';
   const [history, setHistory] = useState<ChatHistory[]>([]);
@@ -61,7 +69,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         setHistory(parsed.sort((a: ChatHistory, b: ChatHistory) => b.timestamp - a.timestamp).slice(0, 30));
       } catch (e) {}
     }
-  }, [isOpen]);
+  }, [isOpen, historyRefreshKey]);
 
   // 删除单条记录
   const deleteHistory = (id: string, e: React.MouseEvent) => {
@@ -122,12 +130,12 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           
           {/* 底部图标区域 */}
           <div className="mt-auto flex flex-col gap-3 pb-4">
-            {/* 查看全部问题 */}
+            {/* 问题库 */}
             <button 
               onClick={() => { onOpenAllModes(); }}
               className="p-2.5 rounded-xl hover:bg-white/10 transition-all"
               style={{ color: slotMachineColors.text }}
-              title={isZh ? '查看全部问题' : 'View All Themes'}
+              title={isZh ? '问题库' : 'Question Bank'}
             >
               <LayoutGrid size={20} />
             </button>
@@ -175,6 +183,19 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         </button>
       </div>
 
+      {/* 先令余额显示 */}
+      <div className="flex items-center justify-between mx-4 mb-2 px-3 py-2 rounded-xl" style={{ background: slotMachineColors.card }}>
+        <div className="flex items-center gap-2">
+          <Coins size={16} style={{ color: '#f59e0b' }} />
+          <span className="text-sm font-medium" style={{ color: slotMachineColors.text }}>
+            {isZh ? '先令余额' : 'Balance'}
+          </span>
+        </div>
+        <span className="text-sm font-bold" style={{ color: '#f59e0b' }}>
+          {userTokens}
+        </span>
+      </div>
+
         {/* 历史记录列表 */}
         <div className={`flex-1 overflow-y-auto px-4 py-2 transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
           <p className="px-3 py-2 text-xs font-medium" style={{ color: slotMachineColors.textMuted }}>
@@ -200,16 +221,21 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                   <div className="flex-1 min-w-0 mr-2">
                     <p className="text-sm truncate" style={{ color: slotMachineColors.text }}>{h.modeLabel}</p>
                     <p className="text-xs" style={{ color: slotMachineColors.textMuted }}>
-                      {h.questionCount} {isZh ? '题' : 'Q'} • {formatTime(h.timestamp)}
+                      {formatTime(h.timestamp)}
                     </p>
                   </div>
-                  <button 
-                    onClick={(e) => deleteHistory(h.id, e)}
-                    className="p-1.5 rounded opacity-0 group-hover:opacity-100 transition-all"
-                    style={{ background: slotMachineColors.cardHover }}
-                  >
-                    <X size={14} style={{ color: slotMachineColors.textMuted }} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {h.isComplete ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-500/20" style={{ color: '#4ade80' }}>
+                        <Sparkles size={12} />
+                        <span>{isZh ? '已生成报告' : 'Report'}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium" style={{ background: slotMachineColors.cardHover, color: slotMachineColors.textMuted }}>
+                        <MessageCircle size={12} />
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -224,7 +250,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             style={{ background: slotMachineColors.card, color: slotMachineColors.text }}
           >
             <LayoutGrid size={16} style={{ color: slotMachineColors.accent }} />
-            <span>{isZh ? '查看全部问题' : 'View All Themes'}</span>
+            <span>{isZh ? '问题库' : 'Question Bank'}</span>
           </button>
 
           <button 

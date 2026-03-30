@@ -72,6 +72,8 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
       if (savedUser) {
         try {
           const saved = JSON.parse(savedUser);
+          console.log('localStorage中的user对象:', saved);
+          // 必须和 saveConversation 保持一致: user?.username || user?.id || 'guest'
           userId = saved.username || saved.id || 'guest';
         } catch (e) {}
       }
@@ -82,7 +84,9 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
       
       // 1. 优先从后端加载（使用新的用户历史API）
       try {
+        console.log('前端使用的userId:', userId);
         const res = await philosophyApi.getUserHistories(userId);
+        console.log('后端历史记录返回:', res);
         if (res && res.history && res.history.length > 0) {
           // 转换后端数据格式为前端格式
           const backendHistory: ChatHistory[] = res.history.map((h: any) => ({
@@ -91,7 +95,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
             mode: h.mode as DiscoveryMode,
             modeLabel: getModeLabel(h.mode, language),
             questionTitle: h.questionTitle || getModeLabel(h.mode, language),
-            questionCount: h.questionCount || 0,
+            questionCount: h.round || h.questionCount || 0,
             lastMessage: h.lastMessage || '',
             timestamp: new Date(h.createdAt || h.created_at).getTime(),
             isComplete: h.hasReport || h.is_complete || false
@@ -211,7 +215,6 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-slate-800 truncate">{h.questionTitle || h.modeLabel}</p>
-                            <p className="text-xs text-slate-400 mt-1">{h.questionCount} {isZh ? '个问题' : 'questions'}</p>
                           </div>
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-slate-400">{formatTime(h.timestamp)}</span>
@@ -250,7 +253,6 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-slate-800 truncate">{h.questionTitle || h.modeLabel}</p>
-                            <p className="text-xs text-slate-400 mt-1">{h.questionCount} {isZh ? '个问题' : 'questions'}</p>
                           </div>
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-slate-400">{formatTime(h.timestamp)}</span>
@@ -298,20 +300,6 @@ export const saveToHistory = (
   isComplete: boolean = false,
   sessionId?: string
 ) => {
-  const id = `history-${Date.now()}`;
-  const newHistory: ChatHistory = {
-    id,
-    sessionId: sessionId || `session-${Date.now()}`,
-    mode,
-    modeLabel,
-    questionTitle,
-    questionCount,
-    lastMessage,
-    timestamp: Date.now(),
-    result,
-    isComplete
-  };
-
   const saved = localStorage.getItem('explorer_compass_history');
   let history: ChatHistory[] = [];
   if (saved) {
@@ -320,8 +308,40 @@ export const saveToHistory = (
     } catch (e) {}
   }
   
-  // 添加新记录到开头
-  history = [newHistory, ...history];
+  const targetSessionId = sessionId || `session-${Date.now()}`;
+  
+  // 查找是否已有该 sessionId 的记录
+  const existingIndex = history.findIndex(h => h.sessionId === targetSessionId);
+  
+  if (existingIndex !== -1) {
+    // 更新已有记录
+    history[existingIndex] = {
+      ...history[existingIndex],
+      modeLabel,
+      questionTitle,
+      questionCount,
+      lastMessage,
+      timestamp: Date.now(),
+      result: result || history[existingIndex].result,
+      isComplete
+    };
+  } else {
+    // 创建新记录
+    const id = `history-${Date.now()}`;
+    const newHistory: ChatHistory = {
+      id,
+      sessionId: targetSessionId,
+      mode,
+      modeLabel,
+      questionTitle,
+      questionCount,
+      lastMessage,
+      timestamp: Date.now(),
+      result,
+      isComplete
+    };
+    history = [newHistory, ...history];
+  }
   
   // 最多保存50条
   if (history.length > 50) {
@@ -329,7 +349,7 @@ export const saveToHistory = (
   }
   
   localStorage.setItem('explorer_compass_history', JSON.stringify(history));
-  return id;
+  return `history-${Date.now()}`;
 };
 
 export default HistorySidebar;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Language } from '../types';
 import { X, GraduationCap, MessageCircle, Sparkles } from 'lucide-react';
+import { API_BASE } from '../config/api';
 
 interface Philosopher {
   id: number;
@@ -35,7 +36,7 @@ export const PhilosophersLibrary: React.FC<PhilosophersLibraryProps> = ({
   useEffect(() => {
     const fetchPhilosophers = async () => {
       try {
-        const res = await fetch('https://vinolab.tech/api/philosophy/philosophers');
+        const res = await fetch(`${API_BASE}/philosophy/philosophers`);
         const data = await res.json();
         if (data.philosophers && Array.isArray(data.philosophers)) {
           setPhilosophers(data.philosophers.filter((p: Philosopher) => p.status === 'active'));
